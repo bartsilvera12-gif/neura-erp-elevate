@@ -33,8 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
-# vercel
+# vercel (not used; Hostinger auto-deploy)
 .vercel
+
+# Claude Code local settings
+.claude/
 
 # Supabase CLI (link local; no subir)
 supabase/.temp/
