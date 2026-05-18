@@ -1,24 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * Esquema Postgres de datos del ERP.
+ * Esquema Postgres único de esta instancia (monocliente Elevate).
  *
- * Requiere en Supabase: Settings → API → "Exposed schemas" incluir `zentra_erp`
- * (además de lo que ya tengas para auth/storage).
+ * Se lee de NEURA_CLIENT_SCHEMA. Si no está definida, default 'elevate'.
+ * Requiere en Supabase: Settings → API → "Exposed schemas" incluir ese schema.
  */
-export const SUPABASE_APP_SCHEMA = "zentra_erp" as const;
+const RAW_NEURA_CLIENT_SCHEMA =
+  typeof process !== "undefined" ? process.env.NEURA_CLIENT_SCHEMA?.trim() : "";
+export const SUPABASE_APP_SCHEMA =
+  RAW_NEURA_CLIENT_SCHEMA && RAW_NEURA_CLIENT_SCHEMA.length > 0
+    ? RAW_NEURA_CLIENT_SCHEMA
+    : "elevate";
 
 /**
- * Schema PostgREST para tablas de negocio de una empresa (`clientes`, `productos`, `chat_*` en tenant, etc.).
+ * Resolución de schema para tablas de negocio.
  *
- * - Valor en `empresas.data_schema` (tras trim) → ese schema (`erp_*` u otro explícito).
- * - `null`, `undefined` o string vacío → legado: datos en plantilla compartida `zentra_erp`.
- *
- * No requiere migraciones manuales por empresa: el fallback es automático.
+ * En instancia monocliente Elevate, SIEMPRE devuelve SUPABASE_APP_SCHEMA.
+ * El parámetro `dataSchema` (legacy) se ignora — se conserva la firma para
+ * no romper callsites mientras se completa la migración.
  */
-export function resolveEmpresaDataSchema(dataSchema: string | null | undefined): string {
-  const t = typeof dataSchema === "string" ? dataSchema.trim() : "";
-  return t.length > 0 ? t : SUPABASE_APP_SCHEMA;
+export function resolveEmpresaDataSchema(_dataSchema?: string | null): string {
+  return SUPABASE_APP_SCHEMA;
 }
 
 /**

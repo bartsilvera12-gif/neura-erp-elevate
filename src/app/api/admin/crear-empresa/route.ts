@@ -15,7 +15,25 @@ function mensajeErrorCrearUsuarioAuth(msg: string): string {
   return msg;
 }
 
-export async function POST(req: Request) {
+export async function POST(_req: Request) {
+  // Monocliente Elevate: la creación de empresas está deshabilitada.
+  // La instancia solo soporta la empresa "Elevate" seedeada en la migración
+  // 20260701000010_elevate_seed_empresa.sql. Los triggers DB también bloquean
+  // INSERTs externos como defensa en profundidad.
+  return NextResponse.json(
+    {
+      error:
+        "Creación de empresas deshabilitada: esta instancia es monocliente (Elevate).",
+    },
+    { status: 410 },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Código legacy de provisioning multiempresa — NO se exporta ni se ejecuta.
+// Se conserva temporalmente como referencia hasta limpieza posterior.
+// ---------------------------------------------------------------------------
+async function _legacyCrearEmpresa(req: Request) {
   let authUserId: string | null = null;
   let empresaId: string | null = null;
 
