@@ -1,14 +1,17 @@
-export const metadata = { title: "FAQ · Elevate" };
+import { FAQ } from "@/components/elevate-public/FAQ";
+import { Policies } from "@/components/elevate-public/Policies";
 
-export default function ElevatePublicFaq() {
+export const metadata = {
+  title: "FAQ y Políticas · Elevate",
+  description: "Preguntas frecuentes, políticas de envío y devolución de Elevate.",
+};
+
+export default function FAQPage() {
   return (
-    <section className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
-        Preguntas frecuentes
-      </h1>
-      <p className="mt-3 text-neutral-600">
-        Tiempos de envío, métodos de pago y devoluciones. (Fase 1: shell.)
-      </p>
-    </section>
+    <>
+      <div className="pt-20" />
+      <FAQ />
+      <Policies />
+    </>
   );
 }

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Playfair_Display, Cormorant_Garamond, Inter } from "next/font/google";
 import { Header } from "@/components/elevate-public/Header";
 import { Footer } from "@/components/elevate-public/Footer";
+import { CartProvider } from "@/components/elevate-public/CartContext";
+import { CartDrawer } from "@/components/elevate-public/CartDrawer";
+import { WhatsAppFloat } from "@/components/elevate-public/WhatsAppFloat";
 import "./elevate-theme.css";
 
 const playfair = Playfair_Display({
@@ -25,7 +28,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Elevate · Maison de Parfum",
-  description: "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales.",
+  description:
+    "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales.",
   icons: {
     icon: [{ url: "/icon.png", type: "image/png" }],
     apple: [{ url: "/apple-icon.png", type: "image/png" }],
@@ -34,8 +38,10 @@ export const metadata: Metadata = {
 
 /**
  * Layout de la web pública Elevate. Scopea fonts y theme tokens vía
- * `.elevate-public-theme` para no afectar al ERP. Header es fixed (h-28);
- * cada page agrega el padding-top apropiado o lo absorbe (Hero usa min-h-screen).
+ * `.elevate-public-theme` para no afectar al ERP. CartProvider envuelve los
+ * children (lo necesitan Header, CartDrawer y todas las pages que usan
+ * useCart). Header es fixed (h-28). CartDrawer + WhatsAppFloat son
+ * overlays globales.
  */
 export default function ElevatePublicLayout({
   children,
@@ -46,9 +52,13 @@ export default function ElevatePublicLayout({
     <div
       className={`elevate-public-theme min-h-svh flex flex-col ${playfair.variable} ${cormorant.variable} ${inter.variable}`}
     >
-      <Header />
-      <main className="flex-1">{children}</main>
-      <Footer />
+      <CartProvider>
+        <Header />
+        <main className="flex-1">{children}</main>
+        <Footer />
+        <CartDrawer />
+        <WhatsAppFloat />
+      </CartProvider>
     </div>
   );
 }

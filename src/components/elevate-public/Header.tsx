@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, ShoppingBag } from "lucide-react";
 import { Logo } from "./Logo";
+import { useCart } from "./CartContext";
 
 const NAV = [
   { label: "Inicio", href: "/" },
@@ -18,15 +19,15 @@ const NAV = [
  * Header pública Elevate.
  *
  * Diferencias respecto a la repo Vite original:
- *   - `react-router-dom` → `next/link` + `usePathname`.
- *   - El botón del carrito es visual (Fase 2: shell). Se conecta al carrito real
- *     en Fase 4. Por ahora `count=0` y onClick no-op.
+ *   - react-router-dom (Link/NavLink/useLocation) → next/link + usePathname.
+ *   - El botón del carrito ahora dispara setOpen(true) del CartContext y
+ *     muestra el count real (CartProvider está en publico/layout.tsx).
  */
 export function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const count = 0;
+  const { count, setOpen: openCart } = useCart();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -78,7 +79,8 @@ export function Header() {
 
           <button
             type="button"
-            aria-label={`Carrito (${count})`}
+            onClick={() => openCart(true)}
+            aria-label={`Abrir carrito (${count})`}
             className="relative p-2.5 text-primary hover:text-gold transition-smooth"
           >
             <ShoppingBag size={22} />

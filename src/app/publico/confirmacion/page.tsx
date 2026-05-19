@@ -1,15 +1,23 @@
-export const metadata = { title: "Confirmación · Elevate" };
+import { Suspense } from "react";
+import { ConfirmacionClient } from "./ConfirmacionClient";
 
-export default function ElevatePublicConfirmacion() {
+export const metadata = {
+  title: "¡Gracias por tu compra! · Elevate",
+  description: "Tu orden ha sido recibida.",
+};
+
+export const dynamic = "force-dynamic";
+
+export default function ConfirmacionPage() {
   return (
-    <section className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">
-        ¡Gracias por tu compra!
-      </h1>
-      <p className="mt-3 text-neutral-600">
-        Confirmación del pedido. (Fase 1: shell — los pedidos reales llegan
-        en Fase 5.)
-      </p>
-    </section>
+    <Suspense
+      fallback={
+        <section className="pt-32 pb-24 min-h-[60vh] flex items-center justify-center">
+          <p className="font-editorial italic text-muted-foreground">Cargando confirmación…</p>
+        </section>
+      }
+    >
+      <ConfirmacionClient />
+    </Suspense>
   );
 }

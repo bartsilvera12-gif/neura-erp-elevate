@@ -1,12 +1,15 @@
-export const metadata = { title: "Marcas · Elevate" };
+import { Brands } from "@/components/elevate-public/Brands";
 
-export default function ElevatePublicMarcas() {
+export const metadata = {
+  title: "Marcas · Elevate",
+  description: "Maisons que elegimos: nicho, ultranicho, diseñador y árabe premium.",
+};
+
+export default function MarcasPage() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-16">
-      <h1 className="text-3xl font-semibold tracking-tight text-neutral-900">Marcas</h1>
-      <p className="mt-3 text-neutral-600">
-        Selección curada de marcas. (Fase 1: shell.)
-      </p>
-    </section>
+    <>
+      <div className="pt-20" />
+      <Brands />
+    </>
   );
 }

@@ -101,3 +101,102 @@
 .elevate-public-theme .animate-fade-up {
   animation: elevate-fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* Sección con fondo bordeaux gradient + light text */
+.elevate-public-theme .gradient-bordeaux {
+  background: linear-gradient(135deg, hsl(346 96% 19%) 0%, hsl(346 80% 12%) 100%);
+}
+
+/* Sombra dorada para el botón flotante de WhatsApp */
+.elevate-public-theme .shadow-gold {
+  box-shadow: 0 8px 30px -12px hsl(39 59% 37% / 0.4);
+}
+
+/* Animación de rotación de Bestsellers */
+@keyframes elevate-bestseller-rotate-in {
+  0% {
+    opacity: 0;
+    transform: translateY(30px) rotateX(-12deg) scale(0.95);
+    filter: blur(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) rotateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+.elevate-public-theme .bestseller-rotate {
+  animation: elevate-bestseller-rotate-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: center top;
+  perspective: 1000px;
+}
+
+/* Tarjetas promo: float + glow + sheen */
+@keyframes elevate-promo-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes elevate-promo-glow-pulse {
+  0%, 100% {
+    box-shadow: 0 10px 30px -12px hsl(39 59% 37% / 0.35),
+                0 0 0 1px hsl(39 59% 45% / 0.25);
+  }
+  50% {
+    box-shadow: 0 25px 60px -18px hsl(39 59% 45% / 0.65),
+                0 0 0 1px hsl(39 59% 55% / 0.55);
+  }
+}
+@keyframes elevate-promo-sheen {
+  0%   { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
+  20%  { opacity: 1; }
+  60%  { opacity: 1; }
+  100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
+}
+
+.elevate-public-theme .promo-card {
+  position: relative;
+  animation: elevate-promo-float 5.5s ease-in-out infinite,
+             elevate-promo-glow-pulse 3.8s ease-in-out infinite;
+  transition: var(--transition-elegant);
+  will-change: transform;
+}
+.elevate-public-theme .promo-card:nth-child(2) { animation-delay: 0.4s, 0.6s; }
+.elevate-public-theme .promo-card:nth-child(3) { animation-delay: 0.8s, 1.2s; }
+.elevate-public-theme .promo-card:nth-child(4) { animation-delay: 1.2s, 1.8s; }
+
+.elevate-public-theme .promo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    hsl(39 70% 70% / 0.35) 48%,
+    hsl(48 90% 90% / 0.55) 50%,
+    hsl(39 70% 70% / 0.35) 52%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  background-position: -150% 0;
+  animation: elevate-promo-sheen 4.5s ease-in-out infinite;
+  mix-blend-mode: overlay;
+}
+
+.elevate-public-theme .promo-card:hover {
+  transform: translateY(-12px) scale(1.015);
+  animation-play-state: paused;
+  box-shadow: 0 30px 70px -20px hsl(39 59% 45% / 0.75),
+              0 0 0 1px hsl(39 59% 55% / 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .elevate-public-theme .promo-card,
+  .elevate-public-theme .promo-card::before,
+  .elevate-public-theme .bestseller-rotate,
+  .elevate-public-theme .animate-fade-up {
+    animation: none !important;
+  }
+}

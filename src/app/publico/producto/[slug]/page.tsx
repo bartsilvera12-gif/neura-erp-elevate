@@ -1,22 +1,38 @@
-type Params = { slug: string };
+import { products } from "@/lib/elevate-public/products-mock";
+import {
+  ProductDetailClient,
+  ProductNotFoundClient,
+} from "@/components/elevate-public/ProductDetailClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function ElevatePublicProducto({
+export async function generateMetadata({
   params,
 }: {
-  params: Promise<Params>;
+  params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return (
-    <section className="mx-auto max-w-6xl px-6 py-16">
-      <p className="text-xs uppercase tracking-widest text-neutral-500">Producto</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-neutral-900">
-        {slug}
-      </h1>
-      <p className="mt-3 text-neutral-600">
-        Detalle del producto. (Fase 1: shell — la data real llega en Fase 3.)
-      </p>
-    </section>
-  );
+  const product = products.find((p) => p.slug === slug);
+  if (!product) {
+    return { title: "Producto no encontrado · Elevate" };
+  }
+  return {
+    title: `${product.name} — ${product.brand} · Elevate`,
+    description: product.description,
+  };
+}
+
+/**
+ * Detalle de producto. Fase 2: mock visual. Cuando se conecte a API real,
+ * reemplazar `products.find` por fetch a `/api/public/elevate/productos/[slug]`.
+ */
+export default async function ProductoPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const product = products.find((p) => p.slug === slug);
+  if (!product) return <ProductNotFoundClient />;
+  return <ProductDetailClient product={product} />;
 }
