@@ -52,6 +52,16 @@ export async function middleware(request: NextRequest) {
     });
   }
 
+  /**
+   * Host NO público (ERP/admin) — bloquear el prefijo interno `/publico/*`
+   * que no debería ser navegable directamente desde el dominio del ERP.
+   * El contenido público solo debe servirse vía hosts en
+   * `ELEVATE_PUBLIC_WEB_HOSTS`.
+   */
+  if (pathname === ELEVATE_PUBLIC_PREFIX || pathname.startsWith(`${ELEVATE_PUBLIC_PREFIX}/`)) {
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
   // ERP/admin path — comportamiento legacy (refresh de sesión Supabase).
   let supabaseResponse = NextResponse.next({ request });
 
