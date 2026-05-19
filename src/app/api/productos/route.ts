@@ -10,13 +10,26 @@ import {
   DuplicadoError,
 } from "@/lib/inventario/server/productos-pg";
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
-import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperCodigoBarras } from "@/lib/text/normalize";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+
+const PRODUCTOS_COLS_PRIV =
+  "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
+  "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
+  "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id";
 
 /**
- * GET /api/productos — lista todos los productos activos via PG directo
- * (soporta tenants erp_* no expuestos por PostgREST).
+ * GET /api/productos — lista de productos activos.
+ *
+ * Transporte: PostgREST HTTPS con el JWT del usuario. La policy
+ * `productos_select USING puede_acceder_empresa(empresa_id)` aplica RLS por
+ * empresa. El filtro explícito empresa_id=eq.X es defensivo (defense in
+ * depth) en caso de que la policy se relaje en el futuro.
+ *
+ * NO usa pg pool — en Hostinger hPanel el puerto 5432 está firewalled y
+ * `SUPABASE_DB_URL` solo es válida para scripts/migraciones por SSH.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -25,26 +38,26 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const empresaId = ctx.auth.empresa_id;
-    const schemaRaw = await fetchDataSchemaForEmpresaId(empresaId);
-    const schema = assertAllowedChatDataSchema(schemaRaw);
-    const pool = getChatPostgresPool();
-    if (!pool) {
-      return NextResponse.json(errorResponse("Pool no disponible."), { status: 500 });
+    const jwt = extractBearerFromRequest(request);
+    const qs = new URLSearchParams({
+      select: PRODUCTOS_COLS_PRIV,
+      empresa_id: `eq.${empresaId}`,
+      activo: "eq.true",
+      order: "nombre.asc",
+      limit: "1000",
+    });
+    const r = await postgrestGet<Record<string, unknown>>("productos", qs.toString(), {
+      role: "jwt",
+      jwt,
+      noStore: true,
+    });
+    if (!r.ok) {
+      console.error("[/api/productos GET]", r.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar los productos."), { status: 502 });
     }
-    const t = quoteSchemaTable(schema, "productos");
-    const { rows } = await queryWithRetry(pool,
-      `SELECT id, empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
-              unidad_medida, metodo_valuacion, activo, created_at, updated_at,
-              codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
-              categoria_principal_id, ubicacion_principal_id, proveedor_principal_id
-         FROM ${t}
-        WHERE empresa_id = $1::uuid AND activo = true
-        ORDER BY nombre`,
-      [empresaId]
-    );
-    return NextResponse.json(successResponse({ productos: rows }));
+    return NextResponse.json(successResponse({ productos: r.rows }));
   } catch (err) {
-    console.error("[/api/productos GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/productos GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudieron cargar los productos."), { status: 500 });
   }
 }

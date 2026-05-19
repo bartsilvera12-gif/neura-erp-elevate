@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
-import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
-import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
-import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import type { Venta, LineaVenta, TipoIvaVenta } from "@/lib/ventas/types";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
 
 interface VentaRow {
   id: string;
@@ -56,44 +53,49 @@ function mapItems(rows: VentaItemRow[]): LineaVenta[] {
 }
 
 /**
- * GET /api/ventas — listado via PG directo (soporta tenants erp_* no
- * expuestos por PostgREST).
+ * GET /api/ventas — listado vía PostgREST HTTPS (JWT). 2 queries
+ * secuenciales (ventas + items) y join en app, igual contrato que antes.
  */
+const VENTAS_COLS = "id,empresa_id,numero_control,moneda,tipo_cambio,subtotal,monto_iva,total,tipo_venta,plazo_dias,fecha";
+const VENTAS_ITEMS_COLS = "venta_id,producto_id,producto_nombre,sku,cantidad,precio_venta_original,precio_venta,tipo_iva,subtotal,monto_iva,total_linea";
+
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
-    const schema = assertAllowedChatDataSchema(await fetchDataSchemaForEmpresaId(empresaId));
-    const pool = getChatPostgresPool();
-    if (!pool) return NextResponse.json(errorResponse("Pool no disponible."), { status: 500 });
+    const jwt = extractBearerFromRequest(request);
 
-    const tV = quoteSchemaTable(schema, "ventas");
-    const tI = quoteSchemaTable(schema, "ventas_items");
+    const ventasQ = new URLSearchParams({
+      select: VENTAS_COLS,
+      empresa_id: `eq.${empresaId}`,
+      order: "fecha.desc",
+      limit: "500",
+    });
+    const ventasRes = await postgrestGet<VentaRow>("ventas", ventasQ.toString(), { role: "jwt", jwt, noStore: true });
+    if (!ventasRes.ok) {
+      console.error("[/api/ventas GET] ventas", ventasRes.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar las ventas."), { status: 502 });
+    }
 
-    // Serializado (no Promise.all) para no agotar el pool session-mode (limite 15).
-    const ventasQ = await queryWithRetry<VentaRow>(pool,
-      `SELECT id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva,
-              total, tipo_venta, plazo_dias, fecha
-         FROM ${tV} WHERE empresa_id = $1::uuid
-        ORDER BY fecha DESC LIMIT 500`,
-      [empresaId]
-    );
-    const itemsQ = await queryWithRetry<VentaItemRow>(pool,
-      `SELECT venta_id, producto_id, producto_nombre, sku, cantidad,
-              precio_venta_original, precio_venta, tipo_iva, subtotal, monto_iva, total_linea
-         FROM ${tI} WHERE empresa_id = $1::uuid`,
-      [empresaId]
-    );
+    const itemsQ = new URLSearchParams({
+      select: VENTAS_ITEMS_COLS,
+      empresa_id: `eq.${empresaId}`,
+    });
+    const itemsRes = await postgrestGet<VentaItemRow>("ventas_items", itemsQ.toString(), { role: "jwt", jwt, noStore: true });
+    if (!itemsRes.ok) {
+      console.error("[/api/ventas GET] items", itemsRes.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar las ventas."), { status: 502 });
+    }
 
     const byVenta = new Map<string, VentaItemRow[]>();
-    for (const row of itemsQ.rows) {
+    for (const row of itemsRes.rows) {
       const list = byVenta.get(row.venta_id) ?? [];
       list.push(row);
       byVenta.set(row.venta_id, list);
     }
 
-    const ventas: Venta[] = ventasQ.rows.map((r) => {
+    const ventas: Venta[] = ventasRes.rows.map((r) => {
       const lineRows = byVenta.get(r.id) ?? [];
       return {
         id: r.id,
@@ -112,7 +114,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(successResponse({ ventas }));
   } catch (err) {
-    console.error("[/api/ventas GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/ventas GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudieron cargar las ventas."), { status: 500 });
   }
 }

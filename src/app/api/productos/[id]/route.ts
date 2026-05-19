@@ -6,12 +6,22 @@ import { API_ERRORS } from "@/lib/api/errors";
 import {
   updateProductoPg,
   rowToProductoApi,
-  getProductoPg,
   DuplicadoError,
 } from "@/lib/inventario/server/productos-pg";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+
+const PRODUCTO_COLS_PRIV =
+  "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
+  "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
+  "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web";
+
+type ProductoRow = Record<string, unknown> & { id?: string };
 
 /**
- * GET /api/productos/[id] — lee un producto via PG directo.
+ * GET /api/productos/[id] — lee un producto vía PostgREST HTTPS con JWT del
+ * usuario. RLS por empresa + filtro defensivo empresa_id=eq.X.
  */
 export async function GET(
   request: NextRequest,
@@ -21,12 +31,29 @@ export async function GET(
     const { id } = await ctxParams.params;
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
-    const row = await getProductoPg(schema, ctx.auth.empresa_id, id);
+    const empresaId = ctx.auth.empresa_id;
+    const jwt = extractBearerFromRequest(request);
+    const qs = new URLSearchParams({
+      select: PRODUCTO_COLS_PRIV,
+      empresa_id: `eq.${empresaId}`,
+      id: `eq.${id}`,
+      limit: "1",
+    });
+    const r = await postgrestGet<ProductoRow>("productos", qs.toString(), {
+      role: "jwt",
+      jwt,
+      noStore: true,
+    });
+    if (!r.ok) {
+      console.error("[/api/productos/[id] GET]", r.error);
+      return NextResponse.json(errorResponse("No se pudo cargar el producto."), { status: 502 });
+    }
+    const row = r.rows[0];
     if (!row) return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
-    return NextResponse.json(successResponse({ producto: rowToProductoApi(row) }));
+    // rowToProductoApi normaliza shape (string IDs, etc.)
+    return NextResponse.json(successResponse({ producto: rowToProductoApi(row as never) }));
   } catch (err) {
-    console.error("[/api/productos/[id] GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/productos/[id] GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudo cargar el producto."), { status: 500 });
   }
 }

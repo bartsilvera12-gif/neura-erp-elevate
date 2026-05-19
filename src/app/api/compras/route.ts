@@ -3,20 +3,42 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import { listCompras, insertCompraConImpacto } from "@/lib/compras/server/compras-pg";
+import { insertCompraConImpacto } from "@/lib/compras/server/compras-pg";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+
+const COMPRAS_COLS =
+  "id,empresa_id,proveedor_id,proveedor_nombre,producto_id,producto_nombre," +
+  "cantidad,moneda,tipo_cambio,costo_unitario_original,costo_unitario," +
+  "iva_tipo,subtotal,monto_iva,total,precio_venta,margen_venta,tipo_pago,plazo_dias," +
+  "nro_timbrado,numero_control,estado,fecha,created_at,updated_at,created_by,usuario_nombre";
 
 /**
- * GET /api/compras — lista via PG directo.
+ * GET /api/compras — listado vía PostgREST HTTPS (JWT).
  */
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
-    const rows = await listCompras(schema, ctx.auth.empresa_id);
-    return NextResponse.json(successResponse({ compras: rows }));
+    const empresaId = ctx.auth.empresa_id;
+    const jwt = extractBearerFromRequest(request);
+    const qs = new URLSearchParams({
+      select: COMPRAS_COLS,
+      empresa_id: `eq.${empresaId}`,
+      order: "fecha.desc",
+      limit: "1000",
+    });
+    const r = await postgrestGet<Record<string, unknown>>("compras", qs.toString(), {
+      role: "jwt",
+      jwt,
+      noStore: true,
+    });
+    if (!r.ok) {
+      console.error("[/api/compras GET]", r.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar las compras."), { status: 502 });
+    }
+    return NextResponse.json(successResponse({ compras: r.rows }));
   } catch (err) {
-    console.error("[/api/compras GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/compras GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudieron cargar las compras."), { status: 500 });
   }
 }

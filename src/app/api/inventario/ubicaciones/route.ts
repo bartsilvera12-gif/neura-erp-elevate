@@ -3,20 +3,39 @@ import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import { listUbicaciones, insertUbicacion } from "@/lib/inventario/server/catalogos-pg";
+import { insertUbicacion } from "@/lib/inventario/server/catalogos-pg";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+
+const UBICACIONES_COLS = "id,empresa_id,nombre,codigo,tipo,parent_id,descripcion,activo,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
+    const empresaId = ctx.auth.empresa_id;
+    const jwt = extractBearerFromRequest(request);
     const url = new URL(request.url);
     const todas = url.searchParams.get("todas") === "1";
-    const rows = await listUbicaciones(schema, ctx.auth.empresa_id, { soloActivas: !todas });
-    return NextResponse.json(successResponse({ ubicaciones: rows }));
+    const qs = new URLSearchParams({
+      select: UBICACIONES_COLS,
+      empresa_id: `eq.${empresaId}`,
+      order: "nombre.asc",
+      limit: "1000",
+    });
+    if (!todas) qs.set("activo", "eq.true");
+    const r = await postgrestGet<Record<string, unknown>>(
+      "inventario_ubicaciones",
+      qs.toString(),
+      { role: "jwt", jwt, noStore: true }
+    );
+    if (!r.ok) {
+      console.error("[/api/inventario/ubicaciones GET]", r.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar las ubicaciones."), { status: 502 });
+    }
+    return NextResponse.json(successResponse({ ubicaciones: r.rows }));
   } catch (err) {
-    console.error("[/api/inventario/ubicaciones GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/inventario/ubicaciones GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudieron cargar las ubicaciones."), { status: 500 });
   }
 }

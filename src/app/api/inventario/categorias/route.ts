@@ -4,22 +4,40 @@ import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema"
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import {
-  listCategoriasProducto,
   insertCategoriaProducto,
 } from "@/lib/inventario/server/catalogos-pg";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
+import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+
+const CATEGORIAS_COLS = "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
+    const empresaId = ctx.auth.empresa_id;
+    const jwt = extractBearerFromRequest(request);
     const url = new URL(request.url);
     const todas = url.searchParams.get("todas") === "1";
-    const rows = await listCategoriasProducto(schema, ctx.auth.empresa_id, { soloActivas: !todas });
-    return NextResponse.json(successResponse({ categorias: rows }));
+    const qs = new URLSearchParams({
+      select: CATEGORIAS_COLS,
+      empresa_id: `eq.${empresaId}`,
+      order: "nombre.asc",
+      limit: "1000",
+    });
+    if (!todas) qs.set("activo", "eq.true");
+    const r = await postgrestGet<Record<string, unknown>>(
+      "categorias_productos",
+      qs.toString(),
+      { role: "jwt", jwt, noStore: true }
+    );
+    if (!r.ok) {
+      console.error("[/api/inventario/categorias GET]", r.error);
+      return NextResponse.json(errorResponse("No se pudieron cargar las categorías."), { status: 502 });
+    }
+    return NextResponse.json(successResponse({ categorias: r.rows }));
   } catch (err) {
-    console.error("[/api/inventario/categorias GET]", err instanceof Error ? err.message : err);
+    console.error("[/api/inventario/categorias GET] uncaught", err instanceof Error ? err.message : err);
     return NextResponse.json(errorResponse("No se pudieron cargar las categorías."), { status: 500 });
   }
 }
