@@ -1,9 +1,13 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
-import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getAuthUserForApiRoute, extractBearerTokenFromRequest } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/super-admin-bootstrap-email";
 import { NextResponse } from "next/server";
 import { resolveEffectiveModules } from "@/lib/modulos/resolve-effective-modules";
+import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { supabaseDbSchemaOption, type AppSupabaseClient } from "@/lib/supabase/schema";
 
 /**
  * Slugs de módulos efectivos para el usuario autenticado (intersección empresa ∩ usuario).
@@ -24,9 +28,48 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     }
 
-    const supabase = createServiceRoleClient();
+    /**
+     * Construye cliente JWT-scoped del usuario para fallback cuando SR está mal
+     * configurada (deploys Hostinger hPanel con env var stale de otro proyecto
+     * Supabase). Sin RLS estricta + grants a `authenticated` en `elevate.*`,
+     * el path JWT funciona.
+     */
+    const bearer = extractBearerTokenFromRequest(request);
+    let userScoped: AppSupabaseClient;
+    if (bearer) {
+      userScoped = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${bearer}` } },
+        ...supabaseDbSchemaOption,
+      }) as AppSupabaseClient;
+    } else {
+      const cookieStore = await cookies();
+      userScoped = createServerClient(url, anonKey, {
+        ...supabaseDbSchemaOption,
+        cookies: {
+          getAll() {
+            return cookieStore.getAll().map((c) => ({ name: c.name, value: c.value }));
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          },
+        },
+      }) as AppSupabaseClient;
+    }
 
-    const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
+    const sr = createServiceRoleClient();
+    // Try SR first; on null result (could be invalid SR), retry with JWT-scoped client.
+    let supabase: AppSupabaseClient = sr;
+    let usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
+    if (!usuario) {
+      const viaJwt = await resolveUsuarioErpFromAuthUser(userScoped, user);
+      if (viaJwt) {
+        supabase = userScoped;
+        usuario = viaJwt;
+      }
+    }
 
     if (!usuario) {
       if (isBootstrapSuperAdminEmail(user.email)) {

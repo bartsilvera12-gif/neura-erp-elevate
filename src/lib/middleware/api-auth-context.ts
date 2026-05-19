@@ -139,62 +139,63 @@ export async function resolveApiAuthContext(
   let row: UsuarioRow | undefined;
   let lastUsuarioErr: string | null = null;
 
+  /**
+   * Estrategia de lectura de `usuarios`:
+   *
+   *   1. SR si está disponible (path legacy / multitenant).
+   *   2. Si SR falla con 401/403 (Unauthorized) — caso típico cuando la SR del
+   *      runtime no pertenece al proyecto Supabase actual (deploys Hostinger
+   *      hPanel con env var stale) — fallback a JWT del usuario contra RLS.
+   *   3. Sin SR configurada: directamente JWT.
+   *
+   * Sin RLS estricta en `elevate.*` y con grants a `authenticated`, el path JWT
+   * funciona. Esto evita un rebote de login solo por una SR mal configurada.
+   */
+  const resolvedUser: User = user;
+  async function tryWithClient(client: AppSupabaseClient): Promise<{ row?: UsuarioRow; err?: string }> {
+    if (resolvedUser.id) {
+      const { data: byId, error: e1, status } = await client
+        .from("usuarios")
+        .select("id, empresa_id, rol, nombre")
+        .eq("auth_user_id", resolvedUser.id)
+        .limit(1);
+      if (e1) return { err: e1.message + (status ? ` [${status}]` : "") };
+      if (byId?.[0]) return { row: byId[0] as UsuarioRow };
+    }
+    if (resolvedUser.email) {
+      for (const em of usuarioEmailLookupVariants(resolvedUser.email)) {
+        const { data: rows, error: uErr, status } = await client
+          .from("usuarios")
+          .select("id, empresa_id, rol, nombre")
+          .ilike("email", em)
+          .limit(1);
+        if (uErr) return { err: uErr.message + (status ? ` [${status}]` : "") };
+        if (rows?.[0]) return { row: rows[0] as UsuarioRow };
+      }
+    }
+    return {};
+  }
+
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (serviceKey) {
     const sr = createServiceRoleClient();
-    if (user.id) {
-      const { data: byId, error: e1 } = await sr
-        .from("usuarios")
-        .select("id, empresa_id, rol, nombre")
-        .eq("auth_user_id", user.id)
-        .limit(1);
-      if (e1) lastUsuarioErr = e1.message;
-      else if (byId?.[0]) row = byId[0] as UsuarioRow;
-    }
-    if (!row && user.email) {
-      for (const em of usuarioEmailLookupVariants(user.email)) {
-        const { data: rows, error: uErr } = await sr
-          .from("usuarios")
-          .select("id, empresa_id, rol, nombre")
-          .ilike("email", em)
-          .limit(1);
-        if (uErr) {
-          lastUsuarioErr = uErr.message;
-          break;
-        }
-        if (rows?.[0]) {
-          row = rows[0] as UsuarioRow;
-          break;
-        }
+    const srResult = await tryWithClient(sr);
+    row = srResult.row;
+    lastUsuarioErr = srResult.err ?? null;
+    // Fallback a JWT si SR fue rechazada por PostgREST (401/403) o devolvió Unauthorized.
+    if (!row && lastUsuarioErr && /401|403|unauthorized|jwt|invalid/i.test(lastUsuarioErr)) {
+      const jwtResult = await tryWithClient(userScopedSupabase);
+      if (jwtResult.row) {
+        row = jwtResult.row;
+        lastUsuarioErr = null;
+      } else if (jwtResult.err) {
+        lastUsuarioErr = `SR:${lastUsuarioErr} | JWT:${jwtResult.err}`;
       }
     }
   } else {
-    if (user.id) {
-      const { data: byId, error: e1 } = await userScopedSupabase
-        .from("usuarios")
-        .select("id, empresa_id, rol, nombre")
-        .eq("auth_user_id", user.id)
-        .limit(1);
-      if (e1) lastUsuarioErr = e1.message;
-      else if (byId?.[0]) row = byId[0] as UsuarioRow;
-    }
-    if (!row && user.email) {
-      for (const em of usuarioEmailLookupVariants(user.email)) {
-        const { data: rows, error: uErr } = await userScopedSupabase
-          .from("usuarios")
-          .select("id, empresa_id, rol, nombre")
-          .ilike("email", em)
-          .limit(1);
-        if (uErr) {
-          lastUsuarioErr = uErr.message;
-          break;
-        }
-        if (rows?.[0]) {
-          row = rows[0] as UsuarioRow;
-          break;
-        }
-      }
-    }
+    const jwtResult = await tryWithClient(userScopedSupabase);
+    row = jwtResult.row;
+    lastUsuarioErr = jwtResult.err ?? null;
   }
 
   if (!row && lastUsuarioErr) {
