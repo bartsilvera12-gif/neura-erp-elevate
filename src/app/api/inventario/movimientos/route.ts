@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
 const MOVIMIENTOS_COLS =
   "id,empresa_id,producto_id,producto_nombre,producto_sku," +
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
-    const jwt = extractBearerFromRequest(request);
+    const jwt = await getAccessTokenForRequest(request);
     const qs = new URLSearchParams({
       select: MOVIMIENTOS_COLS,
       empresa_id: `eq.${empresaId}`,

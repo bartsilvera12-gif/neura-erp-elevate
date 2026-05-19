@@ -5,7 +5,7 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { insertUbicacion } from "@/lib/inventario/server/catalogos-pg";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
-import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
 const UBICACIONES_COLS = "id,empresa_id,nombre,codigo,tipo,parent_id,descripcion,activo,created_at,updated_at";
 
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
-    const jwt = extractBearerFromRequest(request);
+    const jwt = await getAccessTokenForRequest(request);
     const url = new URL(request.url);
     const todas = url.searchParams.get("todas") === "1";
     const qs = new URLSearchParams({

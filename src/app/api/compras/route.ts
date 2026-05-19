@@ -4,7 +4,7 @@ import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema"
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { insertCompraConImpacto } from "@/lib/compras/server/compras-pg";
-import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
 const COMPRAS_COLS =
   "id,empresa_id,proveedor_id,proveedor_nombre,producto_id,producto_nombre," +
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     const empresaId = ctx.auth.empresa_id;
-    const jwt = extractBearerFromRequest(request);
+    const jwt = await getAccessTokenForRequest(request);
     const qs = new URLSearchParams({
       select: COMPRAS_COLS,
       empresa_id: `eq.${empresaId}`,

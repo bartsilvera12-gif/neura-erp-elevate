@@ -60,6 +60,48 @@ export function extractBearerFromRequest(req: Request): string | null {
   return t || null;
 }
 
+/**
+ * Resuelve el access_token del usuario para enviar a PostgREST.
+ *
+ * Estrategia:
+ *   1. Authorization: Bearer <jwt>  (clientes server-to-server, fetch API)
+ *   2. Cookies de Supabase Auth     (browser usuario logueado)
+ *
+ * Sin acceso al JWT, las consultas con RLS por `puede_acceder_empresa` no
+ * van a devolver filas (anon no califica). Por eso es CRÍTICO obtener el
+ * token del usuario incluso cuando el frontend usa cookies.
+ */
+export async function getAccessTokenForRequest(req?: Request | null): Promise<string | null> {
+  // 1) Bearer header
+  if (req) {
+    const fromHeader = extractBearerFromRequest(req);
+    if (fromHeader) return fromHeader;
+  }
+  // 2) Supabase cookies via @supabase/ssr
+  try {
+    const url = publicUrl();
+    const anon = anonKey();
+    // Lazy import — evita ciclos y no fuerza next/headers fuera de RSC.
+    const { createServerClient } = await import("@supabase/ssr");
+    const { cookies } = await import("next/headers");
+    const cookieStore = await cookies();
+    const supa = createServerClient(url, anon, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll().map((c) => ({ name: c.name, value: c.value }));
+        },
+        setAll() {
+          /* read-only path */
+        },
+      },
+    });
+    const { data } = await supa.auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 type FetchOpts = {
   /** "GET"|"POST"|... — default GET */
   method?: string;

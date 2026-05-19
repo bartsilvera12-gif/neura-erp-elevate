@@ -12,7 +12,7 @@ import {
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperCodigoBarras } from "@/lib/text/normalize";
-import { postgrestGet, extractBearerFromRequest } from "@/lib/supabase/postgrest-runtime";
+import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
 const PRODUCTOS_COLS_PRIV =
   "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const empresaId = ctx.auth.empresa_id;
-    const jwt = extractBearerFromRequest(request);
+    const jwt = await getAccessTokenForRequest(request);
     const qs = new URLSearchParams({
       select: PRODUCTOS_COLS_PRIV,
       empresa_id: `eq.${empresaId}`,
