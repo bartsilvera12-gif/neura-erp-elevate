@@ -26,6 +26,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Elevate · Maison de Parfum",
   description: "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales.",
+  icons: {
+    icon: [{ url: "/icon.png", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png", type: "image/png" }],
+  },
 };
 
 /**
