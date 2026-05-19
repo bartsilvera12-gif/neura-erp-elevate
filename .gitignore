@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Playwright E2E artefactos locales
 e2e-super-admin*.png
+
+# generated at build time
+build-info.json
