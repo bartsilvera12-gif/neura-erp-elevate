@@ -1,0 +1,103 @@
+/*
+ * Theme tokens, fuentes y utilidades visuales de la web pública Elevate.
+ *
+ * IMPORTANTE: todo está SCOPEADO bajo `.elevate-public-theme` para no afectar
+ * el resto del ERP. Los Tailwind tokens (`bg-primary`, `bg-cream`, `text-gold`,
+ * etc.) están registrados en `globals.css` apuntando a `var(--primary)` etc.;
+ * acá solo definimos esos vars dentro del scope con la paleta bordeaux/dorado
+ * de Elevate (HSL components → wrap con hsl()).
+ *
+ * Fuentes (Playfair, Cormorant, Inter) se cargan vía `next/font/google` en
+ * `publico/layout.tsx` y se exponen como vars `--font-playfair`, `--font-cormorant`,
+ * `--font-inter`.
+ */
+
+.elevate-public-theme {
+  /* Paleta Elevate (HSL → hsl()) */
+  --background: hsl(48 55% 97%);
+  --foreground: hsl(0 0% 10%);
+  --cream: hsl(49 67% 88%);
+  --cream-foreground: hsl(0 0% 10%);
+  --primary: hsl(346 96% 19%);
+  --primary-foreground: hsl(49 67% 92%);
+  --primary-glow: hsl(346 70% 30%);
+  --gold: hsl(39 59% 37%);
+  --gold-foreground: hsl(48 55% 97%);
+  --gold-light: hsl(39 55% 55%);
+  --muted: hsl(49 40% 92%);
+  --muted-foreground: hsl(220 9% 46%);
+  --border: hsl(39 30% 80%);
+
+  /* Gradientes y sombras Elevate */
+  --shadow-soft: 0 4px 24px -8px hsl(346 96% 19% / 0.12);
+  --shadow-elegant: 0 20px 60px -20px hsl(346 96% 19% / 0.25);
+  --transition-elegant: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+}
+
+.elevate-public-theme h1,
+.elevate-public-theme h2,
+.elevate-public-theme h3,
+.elevate-public-theme h4,
+.elevate-public-theme h5,
+.elevate-public-theme h6 {
+  font-family: var(--font-playfair), "Playfair Display", serif;
+  letter-spacing: -0.01em;
+}
+
+.elevate-public-theme .font-display {
+  font-family: var(--font-playfair), "Playfair Display", serif;
+}
+
+.elevate-public-theme .font-editorial {
+  font-family: var(--font-cormorant), "Cormorant Garamond", serif;
+}
+
+.elevate-public-theme .transition-elegant {
+  transition: var(--transition-elegant);
+}
+
+.elevate-public-theme .transition-smooth {
+  transition: var(--transition-smooth);
+}
+
+.elevate-public-theme .shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.elevate-public-theme .shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+
+.elevate-public-theme .gold-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--gold),
+    transparent
+  );
+}
+
+.elevate-public-theme .text-balance {
+  text-wrap: balance;
+}
+
+@keyframes elevate-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.elevate-public-theme .animate-fade-up {
+  animation: elevate-fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}

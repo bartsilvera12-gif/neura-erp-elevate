@@ -55,6 +55,21 @@
   --color-foreground-muted: var(--foreground-muted);
   --font-sans: var(--font-plus-jakarta), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+
+  /*
+   * Elevate brand tokens — utilizados SOLO por la web pública dentro de
+   * `.elevate-public-theme`. Los `var(--cream)`, `var(--gold)`, etc. no están
+   * definidos en `:root` ERP, así que estas utilities no aplican color fuera
+   * del scope. Esto deja el sistema disponible sin afectar al ERP.
+   */
+  --color-cream: var(--cream);
+  --color-cream-foreground: var(--cream-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-gold-light: var(--gold-light);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow: var(--primary-glow);
+  --color-muted-foreground: var(--muted-foreground);
 }
 
 body {

@@ -1,0 +1,120 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, X, ShoppingBag } from "lucide-react";
+import { Logo } from "./Logo";
+
+const NAV = [
+  { label: "Inicio", href: "/" },
+  { label: "Catálogo", href: "/catalogo" },
+  { label: "Marcas", href: "/marcas" },
+  { label: "Nosotros", href: "/nosotros" },
+  { label: "FAQ", href: "/faq" },
+];
+
+/**
+ * Header pública Elevate.
+ *
+ * Diferencias respecto a la repo Vite original:
+ *   - `react-router-dom` → `next/link` + `usePathname`.
+ *   - El botón del carrito es visual (Fase 2: shell). Se conecta al carrito real
+ *     en Fase 4. Por ahora `count=0` y onClick no-op.
+ */
+export function Header() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const count = 0;
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname?.startsWith(href));
+
+  return (
+    <header
+      className={`fixed top-0 inset-x-0 z-50 transition-elegant bg-background/95 backdrop-blur-md ${
+        scrolled ? "shadow-soft" : ""
+      }`}
+    >
+      <div className="container mx-auto px-6 lg:px-10 flex items-center justify-between h-28">
+        <Logo />
+
+        <nav className="hidden lg:flex items-center gap-8" aria-label="Principal">
+          {NAV.map((n) => {
+            const active = isActive(n.href);
+            return (
+              <Link
+                key={n.href}
+                href={n.href}
+                className={`text-sm tracking-wide transition-smooth relative after:content-[''] after:absolute after:bottom-[-6px] after:left-0 after:h-px after:bg-gold after:transition-all ${
+                  active
+                    ? "text-primary after:w-full"
+                    : "text-foreground/80 hover:text-primary after:w-0 hover:after:w-full"
+                }`}
+              >
+                {n.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="flex items-center gap-3">
+          <Link
+            href="/catalogo"
+            className="hidden lg:inline-flex items-center px-6 py-3 bg-primary text-primary-foreground text-xs tracking-[0.25em] uppercase hover:bg-primary-glow transition-elegant shadow-soft border border-gold/30"
+          >
+            Explorar
+          </Link>
+
+          <button
+            type="button"
+            aria-label={`Carrito (${count})`}
+            className="relative p-2.5 text-primary hover:text-gold transition-smooth"
+          >
+            <ShoppingBag size={22} />
+            {count > 0 && (
+              <span className="absolute -top-1 -right-1 bg-gold text-gold-foreground text-[10px] font-medium h-5 w-5 rounded-full flex items-center justify-center">
+                {count}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOpen((s) => !s)}
+            className="lg:hidden p-2 text-primary"
+            aria-label="Abrir menú"
+          >
+            {open ? <X /> : <Menu />}
+          </button>
+        </div>
+      </div>
+
+      {open && (
+        <div className="lg:hidden bg-background border-t border-gold/20 animate-fade-up">
+          <nav className="flex flex-col p-6 gap-4" aria-label="Móvil">
+            {NAV.map((n) => (
+              <Link
+                key={n.href}
+                href={n.href}
+                className="text-base text-foreground/85 hover:text-primary py-2 border-b border-border/50"
+              >
+                {n.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
+    </header>
+  );
+}
