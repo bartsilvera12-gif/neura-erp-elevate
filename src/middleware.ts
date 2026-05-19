@@ -1,11 +1,58 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  isElevatePublicHost,
+  ELEVATE_PUBLIC_PREFIX,
+  ELEVATE_PUBLIC_HEADER,
+} from "@/lib/elevate-public/hosts";
 
 /**
- * Refresca la sesión Supabase en cookies antes de Route Handlers / RSC.
- * Solo NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (sin db.schema en getUser).
+ * Middleware:
+ *   1. Si el host del request corresponde a la web pública de Elevate
+ *      (config en `ELEVATE_PUBLIC_WEB_HOSTS`), rewrite hacia el prefijo
+ *      interno `/__public/...` y se evita el refresh de sesión Supabase.
+ *      La URL visible en el browser no cambia.
+ *   2. Si el host corresponde al ERP/admin (elevate.neura.com.py u otro),
+ *      se refresca la sesión Supabase en cookies como antes.
+ *
+ * Las rutas `/api/*`, `/_next/*` y estáticas se sirven sin rewrite incluso
+ * en hosts públicos — la API pública vive en `/api/public/elevate/*` y debe
+ * seguir accesible para fetch desde el frontend público.
  */
 export async function middleware(request: NextRequest) {
+  const host = request.headers.get("host");
+  const pathname = request.nextUrl.pathname;
+
+  // Bypass para rutas que no son páginas: API, assets internos.
+  const isAssetOrApi =
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname === "/favicon.ico" ||
+    /\.[a-zA-Z0-9]+$/.test(pathname);
+
+  if (isElevatePublicHost(host)) {
+    if (isAssetOrApi) {
+      // En hosts públicos no refrescamos sesión Supabase (no hay sesión).
+      return NextResponse.next();
+    }
+
+    // Si ya está rewriteado (defensivo), no duplicar prefijo.
+    if (pathname.startsWith(`${ELEVATE_PUBLIC_PREFIX}/`) || pathname === ELEVATE_PUBLIC_PREFIX) {
+      return NextResponse.next();
+    }
+
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/" ? ELEVATE_PUBLIC_PREFIX : `${ELEVATE_PUBLIC_PREFIX}${pathname}`;
+
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(ELEVATE_PUBLIC_HEADER, "1");
+
+    return NextResponse.rewrite(url, {
+      request: { headers: requestHeaders },
+    });
+  }
+
+  // ERP/admin path — comportamiento legacy (refresh de sesión Supabase).
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -36,7 +83,7 @@ export async function middleware(request: NextRequest) {
 
 /**
  * Excluir `/api/webhooks/*`: Meta hace GET sin cookies para verificar el webhook;
- * no debe pasar por refresh de sesión Supabase (y queda listo para proxies estrictos).
+ * no debe pasar por refresh de sesión Supabase.
  */
 export const config = {
   matcher: [
