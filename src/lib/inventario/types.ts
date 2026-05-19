@@ -19,6 +19,14 @@ export interface Producto {
   categoria_principal_id?: string | null;
   ubicacion_principal_id?: string | null;
   proveedor_principal_id?: string | null;
+  /* Campos web pública (Fase 1) */
+  slug_web?: string | null;
+  visible_web?: boolean;
+  destacado_web?: boolean;
+  descripcion_corta?: string | null;
+  descripcion_web?: string | null;
+  marca?: string | null;
+  precio_web?: number | null;
 }
 
 export interface MovimientoInventario {

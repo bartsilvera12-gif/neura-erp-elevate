@@ -133,6 +133,28 @@ export async function PATCH(
       patch.proveedor_principal_id = v;
     }
 
+    // Campos web pública (Fase 1)
+    if (body.slug_web !== undefined) {
+      const v = typeof body.slug_web === "string" ? body.slug_web.trim().toLowerCase() : "";
+      patch.slug_web = v || null;
+    }
+    if (body.visible_web !== undefined) patch.visible_web = body.visible_web === true;
+    if (body.destacado_web !== undefined) patch.destacado_web = body.destacado_web === true;
+    if (body.descripcion_corta !== undefined) {
+      patch.descripcion_corta = typeof body.descripcion_corta === "string" ? body.descripcion_corta : null;
+    }
+    if (body.descripcion_web !== undefined) {
+      patch.descripcion_web = typeof body.descripcion_web === "string" ? body.descripcion_web : null;
+    }
+    if (body.marca !== undefined) {
+      patch.marca = typeof body.marca === "string" ? body.marca.trim() || null : null;
+    }
+    if (body.precio_web !== undefined) {
+      const v = body.precio_web;
+      if (v === null || v === "") patch.precio_web = null;
+      else patch.precio_web = Number.isFinite(Number(v)) ? Number(v) : null;
+    }
+
     try {
       const row = await updateProductoPg(schema, empresaId, id, patch);
       if (!row) {

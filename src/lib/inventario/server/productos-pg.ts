@@ -80,6 +80,14 @@ export interface ProductoRow {
   categoria_principal_id: string | null;
   ubicacion_principal_id: string | null;
   proveedor_principal_id: string | null;
+  /* Campos web pública (Fase 1) */
+  slug_web: string | null;
+  visible_web: boolean;
+  destacado_web: boolean;
+  descripcion_corta: string | null;
+  descripcion_web: string | null;
+  marca: string | null;
+  precio_web: string | number | null;
 }
 
 export interface InsertProductoInput {
@@ -96,13 +104,22 @@ export interface InsertProductoInput {
   categoria_principal_id?: string | null;
   ubicacion_principal_id?: string | null;
   proveedor_principal_id?: string | null;
+  /* Campos web pública (Fase 1) */
+  slug_web?: string | null;
+  visible_web?: boolean;
+  destacado_web?: boolean;
+  descripcion_corta?: string | null;
+  descripcion_web?: string | null;
+  marca?: string | null;
+  precio_web?: number | null;
 }
 
 const RETURNING = `
   id, empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
   unidad_medida, metodo_valuacion, activo, created_at, updated_at,
   codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
-  categoria_principal_id, ubicacion_principal_id, proveedor_principal_id
+  categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
+  slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web
 `;
 
 // ─── Operaciones ──────────────────────────────────────────────────────────
@@ -118,11 +135,13 @@ export async function insertProducto(
     INSERT INTO ${t} (
       empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
       unidad_medida, metodo_valuacion, codigo_barras, codigo_barras_interno,
-      categoria_principal_id, ubicacion_principal_id, proveedor_principal_id
+      categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
+      slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web
     ) VALUES (
       $1::uuid, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric,
       $8, $9, $10, COALESCE($11::boolean, false),
-      $12::uuid, $13::uuid, $14::uuid
+      $12::uuid, $13::uuid, $14::uuid,
+      $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::numeric
     )
     RETURNING ${RETURNING}
   `;
@@ -141,6 +160,13 @@ export async function insertProducto(
     d.categoria_principal_id ?? null,
     d.ubicacion_principal_id ?? null,
     d.proveedor_principal_id ?? null,
+    d.slug_web ?? null,
+    d.visible_web ?? false,
+    d.destacado_web ?? false,
+    d.descripcion_corta ?? null,
+    d.descripcion_web ?? null,
+    d.marca ?? null,
+    d.precio_web ?? null,
   ];
   try {
     const { rows } = await pool().query<ProductoRow>(sql, params);
@@ -166,6 +192,14 @@ export interface UpdateProductoInput {
   categoria_principal_id?: string | null;
   ubicacion_principal_id?: string | null;
   proveedor_principal_id?: string | null;
+  /* Campos web pública (Fase 1) */
+  slug_web?: string | null;
+  visible_web?: boolean;
+  destacado_web?: boolean;
+  descripcion_corta?: string | null;
+  descripcion_web?: string | null;
+  marca?: string | null;
+  precio_web?: number | null;
 }
 
 /** Update parcial. Devuelve la fila o null si no existe / no pertenece a la empresa. */
@@ -208,6 +242,14 @@ export async function updateProductoPg(
   if (patch.categoria_principal_id !== undefined) add("categoria_principal_id", patch.categoria_principal_id || null, "::uuid");
   if (patch.ubicacion_principal_id !== undefined) add("ubicacion_principal_id", patch.ubicacion_principal_id || null, "::uuid");
   if (patch.proveedor_principal_id !== undefined) add("proveedor_principal_id", patch.proveedor_principal_id || null, "::uuid");
+  // Campos web pública (Fase 1)
+  if (patch.slug_web !== undefined) add("slug_web", patch.slug_web || null);
+  if (patch.visible_web !== undefined) add("visible_web", patch.visible_web, "::boolean");
+  if (patch.destacado_web !== undefined) add("destacado_web", patch.destacado_web, "::boolean");
+  if (patch.descripcion_corta !== undefined) add("descripcion_corta", patch.descripcion_corta || null);
+  if (patch.descripcion_web !== undefined) add("descripcion_web", patch.descripcion_web || null);
+  if (patch.marca !== undefined) add("marca", patch.marca || null);
+  if (patch.precio_web !== undefined) add("precio_web", patch.precio_web == null ? null : patch.precio_web, "::numeric");
   if (sets.length === 0) return await getProductoPg(schemaRaw, empresaId, id);
 
   sets.push(`updated_at = now()`);
@@ -407,5 +449,12 @@ export function rowToProductoApi(r: ProductoRow): Record<string, unknown> {
     categoria_principal_id: r.categoria_principal_id ?? null,
     ubicacion_principal_id: r.ubicacion_principal_id ?? null,
     proveedor_principal_id: r.proveedor_principal_id ?? null,
+    slug_web: r.slug_web ?? null,
+    visible_web: r.visible_web,
+    destacado_web: r.destacado_web,
+    descripcion_corta: r.descripcion_corta ?? null,
+    descripcion_web: r.descripcion_web ?? null,
+    marca: r.marca ?? null,
+    precio_web: r.precio_web == null ? null : Number(r.precio_web),
   };
 }

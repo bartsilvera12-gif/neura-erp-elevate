@@ -126,6 +126,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse("El proveedor seleccionado no existe."), { status: 400 });
     }
 
+    // Campos web pública (Fase 1) — opt-in; defaults false/null.
+    const slugWeb = typeof body.slug_web === "string" ? body.slug_web.trim().toLowerCase() || null : null;
+    const visibleWeb = body.visible_web === true;
+    const destacadoWeb = body.destacado_web === true;
+    const descripcionCorta = typeof body.descripcion_corta === "string" ? body.descripcion_corta : null;
+    const descripcionWeb = typeof body.descripcion_web === "string" ? body.descripcion_web : null;
+    const marca = typeof body.marca === "string" ? body.marca.trim() || null : null;
+    const precioWebRaw = body.precio_web;
+    const precioWeb = precioWebRaw == null || precioWebRaw === ""
+      ? null
+      : Number.isFinite(Number(precioWebRaw))
+        ? Number(precioWebRaw)
+        : null;
+
     try {
       const row = await insertProducto(schema, empresaId, {
         nombre,
@@ -141,6 +155,13 @@ export async function POST(request: NextRequest) {
         categoria_principal_id: categoriaPrincipalId,
         ubicacion_principal_id: ubicacionPrincipalId,
         proveedor_principal_id: proveedorPrincipalId,
+        slug_web: slugWeb,
+        visible_web: visibleWeb,
+        destacado_web: destacadoWeb,
+        descripcion_corta: descripcionCorta,
+        descripcion_web: descripcionWeb,
+        marca,
+        precio_web: precioWeb,
       });
 
       // Inventario inicial (mismo schema, via PG directo).

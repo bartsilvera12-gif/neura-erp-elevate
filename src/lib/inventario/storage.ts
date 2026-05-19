@@ -30,6 +30,14 @@ interface ProductoRow {
   categoria_principal_id?: string | null;
   ubicacion_principal_id?: string | null;
   proveedor_principal_id?: string | null;
+  /* Campos web pública (Fase 1) */
+  slug_web?: string | null;
+  visible_web?: boolean;
+  destacado_web?: boolean;
+  descripcion_corta?: string | null;
+  descripcion_web?: string | null;
+  marca?: string | null;
+  precio_web?: number | null;
 }
 
 interface MovimientoRow {
@@ -70,6 +78,13 @@ function rowToProducto(row: ProductoRow): Producto {
     categoria_principal_id: row.categoria_principal_id ?? null,
     ubicacion_principal_id: row.ubicacion_principal_id ?? null,
     proveedor_principal_id: row.proveedor_principal_id ?? null,
+    slug_web: row.slug_web ?? null,
+    visible_web: row.visible_web ?? false,
+    destacado_web: row.destacado_web ?? false,
+    descripcion_corta: row.descripcion_corta ?? null,
+    descripcion_web: row.descripcion_web ?? null,
+    marca: row.marca ?? null,
+    precio_web: row.precio_web == null ? null : Number(row.precio_web),
   };
 }
 
@@ -231,6 +246,13 @@ export async function updateProducto(
   if (datos.categoria_principal_id !== undefined) body.categoria_principal_id = datos.categoria_principal_id ?? null;
   if (datos.ubicacion_principal_id !== undefined) body.ubicacion_principal_id = datos.ubicacion_principal_id ?? null;
   if (datos.proveedor_principal_id !== undefined) body.proveedor_principal_id = datos.proveedor_principal_id ?? null;
+  if (datos.slug_web !== undefined) body.slug_web = datos.slug_web ?? null;
+  if (datos.visible_web !== undefined) body.visible_web = datos.visible_web === true;
+  if (datos.destacado_web !== undefined) body.destacado_web = datos.destacado_web === true;
+  if (datos.descripcion_corta !== undefined) body.descripcion_corta = datos.descripcion_corta ?? null;
+  if (datos.descripcion_web !== undefined) body.descripcion_web = datos.descripcion_web ?? null;
+  if (datos.marca !== undefined) body.marca = datos.marca ?? null;
+  if (datos.precio_web !== undefined) body.precio_web = datos.precio_web ?? null;
 
   const res = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
     method: "PATCH",
