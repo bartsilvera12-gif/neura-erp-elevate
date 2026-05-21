@@ -1,9 +1,13 @@
-import { products } from "@/lib/elevate-public/products-mock";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
+import type { Product } from "@/lib/elevate-public/products-mock";
 
-export function Promos() {
-  const list = products.filter((p) => p.oldPrice);
+/**
+ * Sección Promos. Recibe `products` con `oldPrice` ya filtrados desde el
+ * server component.
+ */
+export function Promos({ products }: { products: Product[] }) {
+  if (products.length === 0) return null;
   return (
     <section
       id="promociones"
@@ -18,7 +22,7 @@ export function Promos() {
           subtitle="Una oportunidad de incorporar piezas codiciadas a un precio excepcional."
         />
         <div className="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
-          {list.map((p) => (
+          {products.map((p) => (
             <div key={p.id} className="promo-card">
               <ProductCard product={p} />
             </div>

@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { products } from "@/lib/elevate-public/products-mock";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
+import type { Product } from "@/lib/elevate-public/products-mock";
 
 const ROTATION_MS = 5000;
 
-export function Bestsellers() {
-  const pool = useMemo(() => products.filter((p) => p.bestseller), []);
+/**
+ * Sección Bestsellers en home. Recibe `products` desde el server component
+ * (productos destacados ya filtrados de la API). Rota grupos de 3 cada 5s
+ * si hay más de 3.
+ */
+export function Bestsellers({ products }: { products: Product[] }) {
+  const pool = useMemo(() => products, [products]);
   const pickRandom = (exclude: string[] = []) => {
     const available = pool.filter((p) => !exclude.includes(p.id));
     const source = available.length >= 3 ? available : pool;
@@ -20,7 +25,10 @@ export function Bestsellers() {
   const [animKey, setAnimKey] = useState(0);
 
   useEffect(() => {
-    if (pool.length <= 3) return;
+    if (pool.length <= 3) {
+      setCurrent(pool.slice(0, 3));
+      return;
+    }
     const id = setInterval(() => {
       setCurrent((prev) => pickRandom(prev.map((p) => p.id)));
       setAnimKey((k) => k + 1);
@@ -28,6 +36,8 @@ export function Bestsellers() {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pool]);
+
+  if (current.length === 0) return null;
 
   return (
     <section id="mas-vendidos" className="py-24 lg:py-32 bg-background">

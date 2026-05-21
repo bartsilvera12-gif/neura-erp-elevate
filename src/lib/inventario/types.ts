@@ -2,6 +2,16 @@ export type MetodoValuacion = "CPP" | "FIFO" | "LIFO";
 export type TipoMovimiento = "ENTRADA" | "SALIDA" | "AJUSTE";
 export type OrigenMovimiento = "compra" | "venta" | "ajuste_manual" | "inventario_inicial";
 
+export type NotaPosicion = "top" | "heart" | "base";
+
+export interface ProductoNotaRef {
+  nota_id: string;
+  posicion: NotaPosicion;
+  orden?: number | null;
+  /* Hidratado desde join — opcional */
+  nombre?: string | null;
+}
+
 export interface Producto {
   id: string;
   nombre: string;
@@ -27,6 +37,18 @@ export interface Producto {
   descripcion_web?: string | null;
   marca?: string | null;
   precio_web?: number | null;
+  /* Catálogo enriquecido (Fase 1 catálogo) */
+  precio_oferta?: number | null;
+  oferta_hasta?: string | null;        // ISO timestamptz
+  nuevo_hasta?: string | null;         // ISO date
+  concentracion?: string | null;
+  volumen_ml?: number | null;
+  genero?: "masculino" | "femenino" | "unisex" | null;
+  proximamente?: boolean;
+  orden_web?: number | null;
+  familia_olfativa_id?: string | null;
+  /* Notas hidratadas — solo desde server al cargar/editar */
+  notas?: ProductoNotaRef[];
 }
 
 export interface MovimientoInventario {

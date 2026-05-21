@@ -13,12 +13,16 @@ import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-po
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperCodigoBarras } from "@/lib/text/normalize";
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
+import { syncCatalogoExtras } from "@/lib/inventario/server/catalogo-web-extras";
 
 const PRODUCTOS_COLS_PRIV =
   "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
-  "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id";
+  "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web," +
+  "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
+  "proximamente,orden_web,familia_olfativa_id";
 
 /**
  * GET /api/productos — lista de productos activos.
@@ -153,6 +157,24 @@ export async function POST(request: NextRequest) {
         ? Number(precioWebRaw)
         : null;
 
+    // Catálogo enriquecido (Fase 1 catálogo) — todos opt-in
+    const num = (v: unknown): number | null => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+    const generoRaw = str(body.genero)?.toLowerCase();
+    const genero = generoRaw === "masculino" || generoRaw === "femenino" || generoRaw === "unisex" ? generoRaw : null;
+    const precioOferta = num(body.precio_oferta);
+    const ofertaHasta = str(body.oferta_hasta);
+    const nuevoHasta = str(body.nuevo_hasta);
+    const concentracion = str(body.concentracion);
+    const volumenMl = num(body.volumen_ml);
+    const proximamente = body.proximamente === true;
+    const ordenWeb = num(body.orden_web);
+    const familiaOlfativaId = str(body.familia_olfativa_id);
+
     try {
       const row = await insertProducto(schema, empresaId, {
         nombre,
@@ -175,6 +197,15 @@ export async function POST(request: NextRequest) {
         descripcion_web: descripcionWeb,
         marca,
         precio_web: precioWeb,
+        precio_oferta: precioOferta,
+        oferta_hasta: ofertaHasta,
+        nuevo_hasta: nuevoHasta,
+        concentracion,
+        volumen_ml: volumenMl == null ? null : Math.max(0, Math.floor(volumenMl)),
+        genero,
+        proximamente,
+        orden_web: ordenWeb == null ? null : Math.floor(ordenWeb),
+        familia_olfativa_id: familiaOlfativaId,
       });
 
       // Inventario inicial (mismo schema, via PG directo).
@@ -217,6 +248,30 @@ export async function POST(request: NextRequest) {
             message: err instanceof Error ? err.message : String(err),
           });
         }
+      }
+
+      // Catálogo enriquecido: familia + notas (best-effort, no rompe alta).
+      try {
+        const familiaNombre = typeof body.familia_olfativa_nombre === "string" ? body.familia_olfativa_nombre.trim() : null;
+        const arr = (v: unknown): string[] =>
+          Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && !!s.trim()).map((s) => s.trim()) : [];
+        const notas_top = arr(body.notas_top);
+        const notas_heart = arr(body.notas_heart);
+        const notas_base = arr(body.notas_base);
+        if (familiaNombre !== null || notas_top.length || notas_heart.length || notas_base.length) {
+          const jwt = await getAccessTokenForRequest(request);
+          await syncCatalogoExtras(jwt, empresaId, row.id, {
+            familia_nombre: familiaNombre,
+            notas_top,
+            notas_heart,
+            notas_base,
+          });
+        }
+      } catch (err) {
+        console.error("[/api/productos] syncCatalogoExtras fallo", {
+          schema, empresaId, productoId: row.id,
+          message: err instanceof Error ? err.message : String(err),
+        });
       }
 
       // Stock inicial por ubicacion (no reemplaza productos.stock_actual).

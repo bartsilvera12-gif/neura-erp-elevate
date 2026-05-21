@@ -9,6 +9,7 @@ import {
   DuplicadoError,
 } from "@/lib/inventario/server/productos-pg";
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
+import { syncCatalogoExtras } from "@/lib/inventario/server/catalogo-web-extras";
 
 const PRODUCTO_COLS_PRIV =
   "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
@@ -182,11 +183,70 @@ export async function PATCH(
       else patch.precio_web = Number.isFinite(Number(v)) ? Number(v) : null;
     }
 
+    // Catálogo enriquecido (Fase 1 catálogo)
+    const numOrNull = (v: unknown): number | null => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    const strOrNull = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() ? v.trim() : v === null || v === "" ? null : null;
+
+    if (body.precio_oferta !== undefined) patch.precio_oferta = numOrNull(body.precio_oferta);
+    if (body.oferta_hasta !== undefined) patch.oferta_hasta = strOrNull(body.oferta_hasta);
+    if (body.nuevo_hasta !== undefined) patch.nuevo_hasta = strOrNull(body.nuevo_hasta);
+    if (body.concentracion !== undefined) {
+      patch.concentracion = typeof body.concentracion === "string" ? body.concentracion.trim() || null : null;
+    }
+    if (body.volumen_ml !== undefined) {
+      const v = numOrNull(body.volumen_ml);
+      patch.volumen_ml = v == null ? null : Math.max(0, Math.floor(v));
+    }
+    if (body.genero !== undefined) {
+      const g = typeof body.genero === "string" ? body.genero.trim().toLowerCase() : "";
+      patch.genero = g === "masculino" || g === "femenino" || g === "unisex" ? g : null;
+    }
+    if (body.proximamente !== undefined) patch.proximamente = body.proximamente === true;
+    if (body.orden_web !== undefined) {
+      const v = numOrNull(body.orden_web);
+      patch.orden_web = v == null ? null : Math.floor(v);
+    }
+    if (body.familia_olfativa_id !== undefined) {
+      patch.familia_olfativa_id = strOrNull(body.familia_olfativa_id);
+    }
+
     try {
       const row = await updateProductoPg(schema, empresaId, id, patch);
       if (!row) {
         return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
       }
+      // Catálogo enriquecido: familia + notas (opt-in por body)
+      try {
+        const arr = (v: unknown): string[] =>
+          Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && !!s.trim()).map((s) => s.trim()) : [];
+        const hasFamilia = body.familia_olfativa_nombre !== undefined;
+        const hasNotas = body.notas_top !== undefined || body.notas_heart !== undefined || body.notas_base !== undefined;
+        if (hasFamilia || hasNotas) {
+          const familiaNombre = hasFamilia
+            ? typeof body.familia_olfativa_nombre === "string"
+              ? body.familia_olfativa_nombre.trim() || null
+              : null
+            : undefined;
+          const jwt = await getAccessTokenForRequest(request);
+          await syncCatalogoExtras(jwt, empresaId, id, {
+            familia_nombre: familiaNombre,
+            notas_top: body.notas_top !== undefined ? arr(body.notas_top) : undefined,
+            notas_heart: body.notas_heart !== undefined ? arr(body.notas_heart) : undefined,
+            notas_base: body.notas_base !== undefined ? arr(body.notas_base) : undefined,
+          });
+        }
+      } catch (err) {
+        console.error("[/api/productos/[id]] syncCatalogoExtras fallo", {
+          schema, empresaId, id,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+
       // Sincronizar categoria principal en puente producto_categorias
       if (categoriaCambia) {
         try {

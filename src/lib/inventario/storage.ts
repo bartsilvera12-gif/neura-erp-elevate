@@ -178,7 +178,7 @@ export type NuevoProductoData = Omit<Producto, "id">;
 export async function saveProducto(
   datos: NuevoProductoData
 ): Promise<Producto | null> {
-  const body = {
+  const body: Record<string, unknown> = {
     nombre: datos.nombre,
     sku: datos.sku,
     costo_promedio: datos.costo_promedio,
@@ -195,6 +195,23 @@ export async function saveProducto(
     categoria_principal_id: datos.categoria_principal_id ?? null,
     ubicacion_principal_id: datos.ubicacion_principal_id ?? null,
     proveedor_principal_id: datos.proveedor_principal_id ?? null,
+    // Catálogo web (Fase 1 catálogo enriquecido)
+    slug_web: datos.slug_web ?? null,
+    visible_web: datos.visible_web ?? false,
+    destacado_web: datos.destacado_web ?? false,
+    descripcion_corta: datos.descripcion_corta ?? null,
+    descripcion_web: datos.descripcion_web ?? null,
+    marca: datos.marca ?? null,
+    precio_web: datos.precio_web ?? null,
+    precio_oferta: datos.precio_oferta ?? null,
+    oferta_hasta: datos.oferta_hasta ?? null,
+    nuevo_hasta: datos.nuevo_hasta ?? null,
+    concentracion: datos.concentracion ?? null,
+    volumen_ml: datos.volumen_ml ?? null,
+    genero: datos.genero ?? null,
+    proximamente: datos.proximamente ?? false,
+    orden_web: datos.orden_web ?? null,
+    familia_olfativa_id: datos.familia_olfativa_id ?? null,
   };
 
   const res = await fetch("/api/productos", {
@@ -253,6 +270,16 @@ export async function updateProducto(
   if (datos.descripcion_web !== undefined) body.descripcion_web = datos.descripcion_web ?? null;
   if (datos.marca !== undefined) body.marca = datos.marca ?? null;
   if (datos.precio_web !== undefined) body.precio_web = datos.precio_web ?? null;
+  // Catálogo enriquecido
+  if (datos.precio_oferta !== undefined) body.precio_oferta = datos.precio_oferta ?? null;
+  if (datos.oferta_hasta !== undefined) body.oferta_hasta = datos.oferta_hasta ?? null;
+  if (datos.nuevo_hasta !== undefined) body.nuevo_hasta = datos.nuevo_hasta ?? null;
+  if (datos.concentracion !== undefined) body.concentracion = datos.concentracion ?? null;
+  if (datos.volumen_ml !== undefined) body.volumen_ml = datos.volumen_ml ?? null;
+  if (datos.genero !== undefined) body.genero = datos.genero ?? null;
+  if (datos.proximamente !== undefined) body.proximamente = datos.proximamente === true;
+  if (datos.orden_web !== undefined) body.orden_web = datos.orden_web ?? null;
+  if (datos.familia_olfativa_id !== undefined) body.familia_olfativa_id = datos.familia_olfativa_id ?? null;
 
   const res = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
     method: "PATCH",

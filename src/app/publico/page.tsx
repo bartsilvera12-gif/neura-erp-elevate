@@ -4,6 +4,7 @@ import { Bestsellers } from "@/components/elevate-public/Bestsellers";
 import { Promos } from "@/components/elevate-public/Promos";
 import { NewArrivals } from "@/components/elevate-public/NewArrivals";
 import { Reviews } from "@/components/elevate-public/Reviews";
+import { fetchCatalog } from "@/lib/elevate-public/catalog-fetch";
 
 export const metadata = {
   title: "Elevate · Maison de Parfum — Perfumería Premium Original",
@@ -11,22 +12,29 @@ export const metadata = {
     "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales. Asesoramiento exclusivo y envíos a todo el país.",
 };
 
+export const dynamic = "force-dynamic";
+
 /**
- * Home pública Elevate — composición completa portada de la repo Vite.
+ * Home pública Elevate — server component.
  *
- * Bestsellers/Promos/NewArrivals usan el mock visual `products-mock.ts`
- * como FALLBACK mientras el catálogo real (vía /api/public/elevate/productos)
- * no tenga productos publicados. Cuando haya productos reales, las pages
- * van a fetchearlos y pasarlos como props a estos componentes en una
- * iteración posterior.
+ * Carga el catálogo completo desde la API real (`/api/public/elevate/productos`)
+ * y deriva los listados para Bestsellers (destacado), Promos (precio_oferta
+ * vigente) y NewArrivals (nuevo_hasta >= hoy). Mock como fallback global
+ * cuando la API falla o no devuelve productos.
  */
-export default function ElevatePublicHome() {
+export default async function ElevatePublicHome() {
+  const { products } = await fetchCatalog({ limit: 100 });
+
+  const bestsellers = products.filter((p) => p.bestseller).slice(0, 6);
+  const promos = products.filter((p) => p.oldPrice != null);
+  const newArrivals = products.filter((p) => p.isNew);
+
   return (
     <>
       <Hero />
-      <Bestsellers />
-      <Promos />
-      <NewArrivals />
+      <Bestsellers products={bestsellers.length > 0 ? bestsellers : products.slice(0, 6)} />
+      {promos.length > 0 && <Promos products={promos} />}
+      {newArrivals.length > 0 && <NewArrivals products={newArrivals} />}
       <Reviews />
 
       <section className="py-24 lg:py-32 bg-cream/30">

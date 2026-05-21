@@ -88,6 +88,16 @@ export interface ProductoRow {
   descripcion_web: string | null;
   marca: string | null;
   precio_web: string | number | null;
+  /* Catálogo enriquecido (Fase 1 catálogo) */
+  precio_oferta: string | number | null;
+  oferta_hasta: string | null;
+  nuevo_hasta: string | null;
+  concentracion: string | null;
+  volumen_ml: number | null;
+  genero: string | null;
+  proximamente: boolean;
+  orden_web: number | null;
+  familia_olfativa_id: string | null;
 }
 
 export interface InsertProductoInput {
@@ -112,6 +122,16 @@ export interface InsertProductoInput {
   descripcion_web?: string | null;
   marca?: string | null;
   precio_web?: number | null;
+  /* Catálogo enriquecido (Fase 1 catálogo) */
+  precio_oferta?: number | null;
+  oferta_hasta?: string | null;
+  nuevo_hasta?: string | null;
+  concentracion?: string | null;
+  volumen_ml?: number | null;
+  genero?: "masculino" | "femenino" | "unisex" | null;
+  proximamente?: boolean;
+  orden_web?: number | null;
+  familia_olfativa_id?: string | null;
 }
 
 const RETURNING = `
@@ -119,7 +139,9 @@ const RETURNING = `
   unidad_medida, metodo_valuacion, activo, created_at, updated_at,
   codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
   categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
-  slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web
+  slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web,
+  precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
+  proximamente, orden_web, familia_olfativa_id
 `;
 
 // ─── Operaciones ──────────────────────────────────────────────────────────
@@ -136,12 +158,16 @@ export async function insertProducto(
       empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
       unidad_medida, metodo_valuacion, codigo_barras, codigo_barras_interno,
       categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
-      slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web
+      slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web,
+      precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
+      proximamente, orden_web, familia_olfativa_id
     ) VALUES (
       $1::uuid, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric,
       $8, $9, $10, COALESCE($11::boolean, false),
       $12::uuid, $13::uuid, $14::uuid,
-      $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::numeric
+      $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::numeric,
+      $22::numeric, $23::timestamptz, $24::date, $25, $26::int, $27,
+      COALESCE($28::boolean, false), $29::int, $30::uuid
     )
     RETURNING ${RETURNING}
   `;
@@ -167,6 +193,15 @@ export async function insertProducto(
     d.descripcion_web ?? null,
     d.marca ?? null,
     d.precio_web ?? null,
+    d.precio_oferta ?? null,
+    d.oferta_hasta ?? null,
+    d.nuevo_hasta ?? null,
+    d.concentracion ?? null,
+    d.volumen_ml ?? null,
+    d.genero ?? null,
+    d.proximamente ?? false,
+    d.orden_web ?? null,
+    d.familia_olfativa_id ?? null,
   ];
   try {
     const { rows } = await pool().query<ProductoRow>(sql, params);
@@ -200,6 +235,16 @@ export interface UpdateProductoInput {
   descripcion_web?: string | null;
   marca?: string | null;
   precio_web?: number | null;
+  /* Catálogo enriquecido (Fase 1 catálogo) */
+  precio_oferta?: number | null;
+  oferta_hasta?: string | null;
+  nuevo_hasta?: string | null;
+  concentracion?: string | null;
+  volumen_ml?: number | null;
+  genero?: "masculino" | "femenino" | "unisex" | null;
+  proximamente?: boolean;
+  orden_web?: number | null;
+  familia_olfativa_id?: string | null;
 }
 
 /** Update parcial. Devuelve la fila o null si no existe / no pertenece a la empresa. */
@@ -250,6 +295,16 @@ export async function updateProductoPg(
   if (patch.descripcion_web !== undefined) add("descripcion_web", patch.descripcion_web || null);
   if (patch.marca !== undefined) add("marca", patch.marca || null);
   if (patch.precio_web !== undefined) add("precio_web", patch.precio_web == null ? null : patch.precio_web, "::numeric");
+  // Catálogo enriquecido
+  if (patch.precio_oferta !== undefined) add("precio_oferta", patch.precio_oferta == null ? null : patch.precio_oferta, "::numeric");
+  if (patch.oferta_hasta !== undefined) add("oferta_hasta", patch.oferta_hasta || null, "::timestamptz");
+  if (patch.nuevo_hasta !== undefined) add("nuevo_hasta", patch.nuevo_hasta || null, "::date");
+  if (patch.concentracion !== undefined) add("concentracion", patch.concentracion || null);
+  if (patch.volumen_ml !== undefined) add("volumen_ml", patch.volumen_ml == null ? null : patch.volumen_ml, "::int");
+  if (patch.genero !== undefined) add("genero", patch.genero || null);
+  if (patch.proximamente !== undefined) add("proximamente", patch.proximamente, "::boolean");
+  if (patch.orden_web !== undefined) add("orden_web", patch.orden_web == null ? null : patch.orden_web, "::int");
+  if (patch.familia_olfativa_id !== undefined) add("familia_olfativa_id", patch.familia_olfativa_id || null, "::uuid");
   if (sets.length === 0) return await getProductoPg(schemaRaw, empresaId, id);
 
   sets.push(`updated_at = now()`);
@@ -456,5 +511,14 @@ export function rowToProductoApi(r: ProductoRow): Record<string, unknown> {
     descripcion_web: r.descripcion_web ?? null,
     marca: r.marca ?? null,
     precio_web: r.precio_web == null ? null : Number(r.precio_web),
+    precio_oferta: r.precio_oferta == null ? null : Number(r.precio_oferta),
+    oferta_hasta: r.oferta_hasta ?? null,
+    nuevo_hasta: r.nuevo_hasta ?? null,
+    concentracion: r.concentracion ?? null,
+    volumen_ml: r.volumen_ml ?? null,
+    genero: r.genero ?? null,
+    proximamente: !!r.proximamente,
+    orden_web: r.orden_web ?? null,
+    familia_olfativa_id: r.familia_olfativa_id ?? null,
   };
 }

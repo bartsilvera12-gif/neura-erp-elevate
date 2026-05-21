@@ -7,6 +7,12 @@ import MontoInput from "@/components/ui/MontoInput";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import { productoExiste, saveProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
+import {
+  CatalogoWebFields,
+  catalogoWebToPayload,
+  emptyCatalogoWeb,
+  type CatalogoWebState,
+} from "@/components/inventario/CatalogoWebFields";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -32,6 +38,9 @@ export default function NuevoProductoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
   const [codigoGeneradoInterno, setCodigoGeneradoInterno] = useState(false);
+
+  // Catálogo web (Fase 1 catálogo enriquecido)
+  const [catWeb, setCatWeb] = useState<CatalogoWebState>(emptyCatalogoWeb);
 
   // Relaciones opcionales
   const [categoriaId, setCategoriaId] = useState<string | null>(null);
@@ -247,6 +256,7 @@ export default function NuevoProductoPage() {
         }
       }
 
+      const cw = catalogoWebToPayload(catWeb);
       let guardado;
       try {
         guardado = await saveProducto({
@@ -263,7 +273,42 @@ export default function NuevoProductoPage() {
           categoria_principal_id: categoriaId,
           ubicacion_principal_id: ubicacionId,
           proveedor_principal_id: proveedorId,
+          // Catálogo web
+          slug_web: cw.slug_web,
+          visible_web: cw.visible_web,
+          destacado_web: cw.destacado_web,
+          descripcion_corta: cw.descripcion_corta,
+          descripcion_web: cw.descripcion_web,
+          marca: cw.marca,
+          precio_web: cw.precio_web,
+          precio_oferta: cw.precio_oferta,
+          oferta_hasta: cw.oferta_hasta,
+          nuevo_hasta: cw.nuevo_hasta,
+          concentracion: cw.concentracion,
+          volumen_ml: cw.volumen_ml,
+          genero: cw.genero ?? undefined,
+          proximamente: cw.proximamente,
+          orden_web: cw.orden_web,
+          // familia + notas se mandan aparte por estar fuera del shape Producto
         });
+        // Familia + notas (post-create) — best-effort via PATCH al mismo endpoint
+        if (guardado && (cw.familia_olfativa_nombre !== null || cw.notas_top.length || cw.notas_heart.length || cw.notas_base.length)) {
+          try {
+            await fetch(`/api/productos/${guardado.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                familia_olfativa_nombre: cw.familia_olfativa_nombre,
+                notas_top: cw.notas_top,
+                notas_heart: cw.notas_heart,
+                notas_base: cw.notas_base,
+              }),
+              credentials: "include",
+            });
+          } catch (e) {
+            console.warn("[nuevo producto] catálogo extras fallaron", e);
+          }
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "No se pudo guardar el producto.";
         setErrorGeneral(msg);
@@ -712,6 +757,9 @@ export default function NuevoProductoPage() {
               <option value="LIFO">LIFO — Último en entrar, primero en salir</option>
             </select>
           </div>
+
+          {/* Catálogo web (Fase 1 catálogo enriquecido) */}
+          <CatalogoWebFields value={catWeb} onChange={setCatWeb} />
 
           {/* Acciones */}
           <div className="flex gap-4 pt-2">

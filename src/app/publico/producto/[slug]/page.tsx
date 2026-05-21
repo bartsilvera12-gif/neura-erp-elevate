@@ -1,8 +1,8 @@
-import { products } from "@/lib/elevate-public/products-mock";
 import {
   ProductDetailClient,
   ProductNotFoundClient,
 } from "@/components/elevate-public/ProductDetailClient";
+import { fetchProductoDetalle } from "@/lib/elevate-public/catalog-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -12,19 +12,19 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = products.find((p) => p.slug === slug);
-  if (!product) {
-    return { title: "Producto no encontrado · Elevate" };
-  }
+  const found = await fetchProductoDetalle(slug);
+  if (!found) return { title: "Producto no encontrado · Elevate" };
+  const p = found.product;
   return {
-    title: `${product.name} — ${product.brand} · Elevate`,
-    description: product.description,
+    title: `${p.name} — ${p.brand} · Elevate`,
+    description: p.description,
   };
 }
 
 /**
- * Detalle de producto. Fase 2: mock visual. Cuando se conecte a API real,
- * reemplazar `products.find` por fetch a `/api/public/elevate/productos/[slug]`.
+ * Detalle producto. API primaria (incluye descripcion_web, concentración,
+ * volumen, género, familia olfativa, pirámide top/heart/base) con fallback
+ * al mock cuando la API devuelve 404/error.
  */
 export default async function ProductoPage({
   params,
@@ -32,7 +32,7 @@ export default async function ProductoPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = products.find((p) => p.slug === slug);
-  if (!product) return <ProductNotFoundClient />;
-  return <ProductDetailClient product={product} />;
+  const found = await fetchProductoDetalle(slug);
+  if (!found) return <ProductNotFoundClient />;
+  return <ProductDetailClient product={found.product} />;
 }
