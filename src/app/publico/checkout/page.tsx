@@ -27,14 +27,60 @@ export default function CheckoutPage() {
   });
 
   const update = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (items.length === 0) return;
+    if (items.length === 0 || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
 
-    const orderId = `EL-${Date.now().toString(36).toUpperCase()}`;
+    // 1. Crear pedido en ERP (RPC server-side recalcula precios reales).
+    let createdNumero: string | null = null;
+    let createdToken: string | null = null;
+    let createdTotal: number = total;
+    try {
+      const r = await fetch("/api/public/elevate/pedidos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente: {
+            nombre: form.name,
+            email: form.email,
+            telefono: form.phone,
+            direccion: form.address,
+            ciudad: form.city,
+            zip: form.zip,
+          },
+          items: items.map((i) => ({ producto_id: i.product.id, cantidad: i.qty })),
+          payment_method: form.payment,
+          notas: form.notes,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        numero?: string;
+        public_token?: string;
+        total?: number;
+        error?: string;
+      };
+      if (!r.ok || !j.numero) {
+        setSubmitError(j.error || "No se pudo registrar el pedido. Intentá nuevamente.");
+        setSubmitting(false);
+        return;
+      }
+      createdNumero = j.numero;
+      createdToken = j.public_token ?? null;
+      createdTotal = typeof j.total === "number" ? j.total : total;
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Error de red al registrar el pedido.");
+      setSubmitting(false);
+      return;
+    }
+
+    // 2. Snapshot visual local como respaldo (no es la fuente de verdad).
     const order = {
-      id: orderId,
+      id: createdNumero,
       createdAt: new Date().toISOString(),
       items: items.map((i) => ({
         name: i.product.name,
@@ -42,7 +88,7 @@ export default function CheckoutPage() {
         qty: i.qty,
         price: i.product.price,
       })),
-      total,
+      total: createdTotal,
       customer: form,
     };
     try {
@@ -51,8 +97,9 @@ export default function CheckoutPage() {
       /* private mode / quota — continúa */
     }
 
+    // 3. WhatsApp con número REAL del pedido (ya creado en ERP).
     const lines = [
-      `🌹 *NUEVA ORDEN ELEVATE* — ${orderId}`,
+      `🌹 *NUEVA ORDEN ELEVATE* — ${createdNumero}`,
       ``,
       `*Cliente:* ${form.name}`,
       `*Tel:* ${form.phone}`,
@@ -64,18 +111,18 @@ export default function CheckoutPage() {
         (i) => `• ${i.product.name} — ${i.product.brand} × ${i.qty} — ${formatPrice(i.product.price * i.qty)}`
       ),
       ``,
-      `*Total:* ${formatPrice(total)}`,
+      `*Total:* ${formatPrice(createdTotal)}`,
       `*Pago:* ${form.payment}`,
       form.notes ? `*Notas:* ${form.notes}` : "",
     ]
       .filter(Boolean)
       .join("\n");
-
     const wa = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines)}`;
     window.open(wa, "_blank", "noopener,noreferrer");
 
     clear();
-    router.push(`/confirmacion?order=${orderId}`);
+    const tokenParam = createdToken ? `&token=${encodeURIComponent(createdToken)}` : "";
+    router.push(`/confirmacion?pedido=${encodeURIComponent(createdNumero!)}${tokenParam}`);
   };
 
   if (items.length === 0) {
@@ -175,11 +222,17 @@ export default function CheckoutPage() {
               </div>
             </fieldset>
 
+            {submitError && (
+              <div className="border border-red-300 bg-red-50 text-red-700 text-sm p-3 rounded">
+                {submitError}
+              </div>
+            )}
             <button
               type="submit"
-              className="w-full bg-primary text-primary-foreground py-5 text-xs tracking-[0.4em] uppercase hover:bg-primary-glow transition-elegant shadow-elegant"
+              disabled={submitting}
+              className="w-full bg-primary text-primary-foreground py-5 text-xs tracking-[0.4em] uppercase hover:bg-primary-glow transition-elegant shadow-elegant disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Confirmar orden — {formatPrice(total)}
+              {submitting ? "Procesando…" : `Confirmar orden — ${formatPrice(total)}`}
             </button>
           </form>
 
