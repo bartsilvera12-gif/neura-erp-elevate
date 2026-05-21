@@ -13,6 +13,7 @@ import {
   emptyCatalogoWeb,
   type CatalogoWebState,
 } from "@/components/inventario/CatalogoWebFields";
+import { slugifyNombre } from "@/lib/inventario/slug";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -300,15 +301,40 @@ export default function NuevoProductoPage() {
   }
 
   // ── Cálculos en tiempo real ──────────────────────────────────────────────────
-  // Markup y margen son derivados de costo y precio (independientes).
-  // Cada uno se muestra cuando su denominador es > 0; si no, "—".
+  // Markup y margen usan precio EFECTIVO:
+  //   - precio_oferta si está vigente (precio_oferta > 0 AND (oferta_hasta vacía
+  //     OR oferta_hasta >= now()))
+  //   - precio_venta en cualquier otro caso.
   const costo = parseFloat(form.costo_promedio);
-  const precio = parseFloat(form.precio_venta);
+  const precioVentaN = parseFloat(form.precio_venta);
+  const precioOfertaN = parseFloat(catWeb.precio_oferta);
+  const ofertaVigente = (() => {
+    if (!Number.isFinite(precioOfertaN) || precioOfertaN <= 0) return false;
+    if (!catWeb.oferta_hasta) return true;
+    const t = Date.parse(catWeb.oferta_hasta);
+    if (Number.isNaN(t)) return true;
+    return t >= Date.now();
+  })();
+  const precioEfectivo = ofertaVigente ? precioOfertaN : precioVentaN;
+
   const costoOk = Number.isFinite(costo) && costo > 0;
-  const precioOk = Number.isFinite(precio) && precio > 0;
-  const markupCalc = costoOk && Number.isFinite(precio) ? ((precio - costo) / costo) * 100 : null;
-  const margenVentaCalc = precioOk && Number.isFinite(costo) ? ((precio - costo) / precio) * 100 : null;
-  const esPerdida = costoOk && precioOk && precio < costo;
+  const precioEfectivoOk = Number.isFinite(precioEfectivo) && precioEfectivo > 0;
+  const markupCalc = costoOk && Number.isFinite(precioEfectivo)
+    ? ((precioEfectivo - costo) / costo) * 100
+    : null;
+  const margenVentaCalc = precioEfectivoOk && Number.isFinite(costo)
+    ? ((precioEfectivo - costo) / precioEfectivo) * 100
+    : null;
+  const esPerdida = costoOk && precioEfectivoOk && precioEfectivo < costo;
+
+  // Auto-completar slug desde nombre si el usuario aún no lo tocó
+  useEffect(() => {
+    if (!catWeb.slug_web && form.nombre.trim()) {
+      const auto = slugifyNombre(form.nombre);
+      if (auto) setCatWeb((p) => ({ ...p, slug_web: auto }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.nombre]);
 
   const inputClass =
     "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
@@ -509,21 +535,25 @@ export default function NuevoProductoPage() {
 
             </div>
 
-            {/* Indicadores read-only: markup + margen — calculados automáticamente */}
+            {/* Indicadores read-only: markup + margen — calculados con precio efectivo */}
             <div className="mt-4 grid grid-cols-2 gap-4">
               <div className="border border-blue-100 bg-blue-50 rounded-lg px-4 py-3">
                 <p className="text-xs font-medium mb-1 text-blue-500">Markup s/costo</p>
                 <p className="text-lg font-bold tabular-nums text-blue-700">
                   {markupCalc !== null ? `${markupCalc.toFixed(2)}%` : "—"}
                 </p>
-                <p className="text-xs mt-0.5 text-blue-400">(precio − costo) / costo</p>
+                <p className="text-xs mt-0.5 text-blue-400">
+                  {ofertaVigente ? "Calculado con precio de oferta" : "Calculado con precio de venta"}
+                </p>
               </div>
               <div className="border border-green-100 bg-green-50 rounded-lg px-4 py-3">
                 <p className="text-xs font-medium mb-1 text-green-500">Margen s/venta</p>
                 <p className="text-lg font-bold tabular-nums text-green-700">
                   {margenVentaCalc !== null ? `${margenVentaCalc.toFixed(2)}%` : "—"}
                 </p>
-                <p className="text-xs mt-0.5 text-green-400">(precio − costo) / precio</p>
+                <p className="text-xs mt-0.5 text-green-400">
+                  {ofertaVigente ? "Calculado con precio de oferta" : "Calculado con precio de venta"}
+                </p>
               </div>
             </div>
 
@@ -531,7 +561,9 @@ export default function NuevoProductoPage() {
               <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-600">
                 <span className="mt-0.5 text-base leading-none">⚠</span>
                 <span>
-                  El precio de venta es <strong>menor al costo</strong>. Cada unidad vendida generará una pérdida neta.
+                  Atención: con este precio el producto se vende{" "}
+                  <strong>por debajo del costo</strong>.
+                  {ofertaVigente ? " (precio de oferta vigente)" : ""}
                 </span>
               </div>
             )}
@@ -655,8 +687,13 @@ export default function NuevoProductoPage() {
           {/* Método de valuación: fijo en CPP — no editable desde la UI.
               El backend recibe siempre `metodo_valuacion: "CPP"` desde state. */}
 
-          {/* Catálogo web (Fase 1 catálogo enriquecido) */}
-          <CatalogoWebFields value={catWeb} onChange={setCatWeb} />
+          {/* Catálogo web */}
+          <CatalogoWebFields
+            value={catWeb}
+            onChange={setCatWeb}
+            nombre={form.nombre}
+            precioVenta={form.precio_venta}
+          />
 
           {/* Acciones */}
           <div className="flex gap-4 pt-2">

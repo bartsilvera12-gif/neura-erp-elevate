@@ -372,11 +372,26 @@ export default function EditarProductoPage() {
 
   const costo = parseFloat(form.costo_promedio);
   const precio = parseFloat(form.precio_venta);
+  // Precio efectivo = precio_oferta si está vigente, sino precio_venta.
+  const precioOfertaN = parseFloat(catWeb.precio_oferta);
+  const ofertaVigente = (() => {
+    if (!Number.isFinite(precioOfertaN) || precioOfertaN <= 0) return false;
+    if (!catWeb.oferta_hasta) return true;
+    const t = Date.parse(catWeb.oferta_hasta);
+    if (Number.isNaN(t)) return true;
+    return t >= Date.now();
+  })();
+  const precioEfectivo = ofertaVigente ? precioOfertaN : precio;
+
   const costoOk = Number.isFinite(costo) && costo > 0;
-  const precioOk = Number.isFinite(precio) && precio > 0;
-  const markupCalc = costoOk && Number.isFinite(precio) ? ((precio - costo) / costo) * 100 : null;
-  const margenVentaCalc = precioOk && Number.isFinite(costo) ? ((precio - costo) / precio) * 100 : null;
-  const esPerdida = costoOk && precioOk && precio < costo;
+  const precioEfectivoOk = Number.isFinite(precioEfectivo) && precioEfectivo > 0;
+  const markupCalc = costoOk && Number.isFinite(precioEfectivo)
+    ? ((precioEfectivo - costo) / costo) * 100
+    : null;
+  const margenVentaCalc = precioEfectivoOk && Number.isFinite(costo)
+    ? ((precioEfectivo - costo) / precioEfectivo) * 100
+    : null;
+  const esPerdida = costoOk && precioEfectivoOk && precioEfectivo < costo;
 
   const inputClass =
     "w-full border border-gray-300 rounded-lg px-4 py-3 outline-none focus:border-gray-500 transition-colors text-sm";
@@ -601,21 +616,27 @@ export default function EditarProductoPage() {
                 <p className="text-lg font-bold tabular-nums text-blue-700">
                   {markupCalc !== null ? `${markupCalc.toFixed(2)}%` : "—"}
                 </p>
-                <p className="text-xs mt-0.5 text-blue-400">(precio − costo) / costo</p>
+                <p className="text-xs mt-0.5 text-blue-400">
+                  {ofertaVigente ? "Calculado con precio de oferta" : "Calculado con precio de venta"}
+                </p>
               </div>
               <div className="border border-green-100 bg-green-50 rounded-lg px-4 py-3">
                 <p className="text-xs font-medium mb-1 text-green-500">Margen s/venta</p>
                 <p className="text-lg font-bold tabular-nums text-green-700">
                   {margenVentaCalc !== null ? `${margenVentaCalc.toFixed(2)}%` : "—"}
                 </p>
-                <p className="text-xs mt-0.5 text-green-400">(precio − costo) / precio</p>
+                <p className="text-xs mt-0.5 text-green-400">
+                  {ofertaVigente ? "Calculado con precio de oferta" : "Calculado con precio de venta"}
+                </p>
               </div>
             </div>
             {esPerdida && (
               <div className="mt-3 flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-xs text-red-600">
                 <span className="mt-0.5 text-base leading-none">⚠</span>
                 <span>
-                  El precio de venta es <strong>menor al costo</strong>. Cada unidad vendida generará una pérdida neta.
+                  Atención: con este precio el producto se vende{" "}
+                  <strong>por debajo del costo</strong>.
+                  {ofertaVigente ? " (precio de oferta vigente)" : ""}
                 </span>
               </div>
             )}
@@ -669,7 +690,12 @@ export default function EditarProductoPage() {
           </div>
           )}
 
-          <CatalogoWebFields value={catWeb} onChange={setCatWeb} />
+          <CatalogoWebFields
+            value={catWeb}
+            onChange={setCatWeb}
+            nombre={form.nombre}
+            precioVenta={form.precio_venta}
+          />
 
           <div className="flex gap-4 pt-2">
             <button

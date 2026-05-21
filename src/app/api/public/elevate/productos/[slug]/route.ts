@@ -89,11 +89,13 @@ function pickNotas(rows: NotaRow[] | null, pos: "top" | "heart" | "base"): strin
 }
 
 function toDetalle(r: ProductoDetalleRaw) {
+  // Regla Elevate: precio base = precio_venta (precio_web legacy, no
+  // se prioriza).
   const precioBase =
-    typeof r.precio_web === "number" && Number.isFinite(r.precio_web)
-      ? r.precio_web
-      : typeof r.precio_venta === "number" && Number.isFinite(r.precio_venta)
+    typeof r.precio_venta === "number" && Number.isFinite(r.precio_venta)
       ? r.precio_venta
+      : typeof r.precio_web === "number" && Number.isFinite(r.precio_web)
+      ? r.precio_web
       : 0;
   const ofertaActiva = isOfertaActiva(r.precio_oferta, r.oferta_hasta);
   const precio = ofertaActiva ? (r.precio_oferta as number) : precioBase;

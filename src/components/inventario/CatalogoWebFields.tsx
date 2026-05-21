@@ -1,15 +1,16 @@
 "use client";
 
+import { slugifyNombre } from "@/lib/inventario/slug";
+
 /**
  * Sección "Catálogo web" del formulario de productos del ERP.
  *
- * Encapsula los campos que controlan cómo aparece el producto en la web
- * pública: visibilidad, slug, descripciones, marca, precio web, oferta,
- * "nuevo hasta", concentración, volumen, género, próximamente, orden, y
- * pirámide olfativa libre (familia + notas top/heart/base separadas por
- * coma; el server resuelve las filas auxiliares).
- *
- * Estado controlado por el parent. Render-only.
+ * UX:
+ *   - Slug con botón "Generar desde nombre".
+ *   - Precio normal web NO se ingresa: la web siempre usa `precio_venta`
+ *     del bloque superior. Solo se editan oferta y vigencia.
+ *   - Pirámide olfativa libre (familia + notas CSV) — el server resuelve
+ *     las filas auxiliares en `familias_olfativas` y `notas_olfativas`.
  */
 
 export type CatalogoWebState = {
@@ -19,10 +20,11 @@ export type CatalogoWebState = {
   descripcion_corta: string;
   descripcion_web: string;
   marca: string;
-  precio_web: string;        // string en el form, normalizado al guardar
+  /** Legacy. NO editable desde UI. La web usa precio_venta. */
+  precio_web: string;
   precio_oferta: string;
-  oferta_hasta: string;      // datetime-local
-  nuevo_hasta: string;       // date
+  oferta_hasta: string;
+  nuevo_hasta: string;
   concentracion: string;
   volumen_ml: string;
   genero: "" | "masculino" | "femenino" | "unisex";
@@ -59,30 +61,71 @@ export const emptyCatalogoWeb: CatalogoWebState = {
 interface Props {
   value: CatalogoWebState;
   onChange: (next: CatalogoWebState) => void;
+  /** Nombre del producto en el bloque superior — usado por el botón "Generar slug". */
+  nombre: string;
+  /** Precio de venta del bloque superior — mostrado como informativo. */
+  precioVenta?: string | number;
 }
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
 const labelClass = "block text-sm font-medium text-slate-700 mb-2";
 
-export function CatalogoWebFields({ value, onChange }: Props) {
+function fmtGs(v: string | number | undefined): string {
+  if (v == null || v === "") return "—";
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  return `Gs. ${n.toLocaleString("es-PY")}`;
+}
+
+export function CatalogoWebFields({ value, onChange, nombre, precioVenta }: Props) {
   function set<K extends keyof CatalogoWebState>(k: K, v: CatalogoWebState[K]) {
     onChange({ ...value, [k]: v });
   }
 
+  function handleGenerarSlug() {
+    const next = slugifyNombre(nombre);
+    if (!next) return;
+    set("slug_web", next);
+  }
+
   return (
     <section className="border-t border-slate-100 pt-6 mt-2">
-      <header className="flex items-center justify-between mb-5">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-800">Catálogo web</h2>
-          <p className="text-xs text-slate-500">
-            Datos visibles en la tienda pública. Si <strong>Visible en web</strong> está apagado,
-            el producto queda oculto.
-          </p>
-        </div>
+      <header className="mb-5">
+        <h2 className="text-lg font-semibold text-slate-800">Catálogo web</h2>
+        <p className="text-xs text-slate-500">
+          Datos visibles en la tienda pública. Si <strong>Visible en web</strong> está apagado,
+          el producto queda oculto.
+        </p>
       </header>
 
-      {/* Toggles principales */}
+      {/* Slug + acciones */}
+      <div className="mb-5">
+        <label className={labelClass}>Slug web</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={value.slug_web}
+            onChange={(e) => set("slug_web", e.target.value.toLowerCase())}
+            placeholder="oud-royale"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={handleGenerarSlug}
+            disabled={!nombre || !nombre.trim()}
+            className="shrink-0 px-3 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={nombre ? `Genera "${slugifyNombre(nombre)}"` : "Cargá el nombre primero"}
+          >
+            Generar desde nombre
+          </button>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          URL pública: <code className="text-slate-700">/producto/{value.slug_web || "—"}</code>
+        </p>
+      </div>
+
+      {/* Toggles */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -113,18 +156,8 @@ export function CatalogoWebFields({ value, onChange }: Props) {
         </label>
       </div>
 
-      {/* Slug + marca + género */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className={labelClass}>Slug web</label>
-          <input
-            type="text"
-            value={value.slug_web}
-            onChange={(e) => set("slug_web", e.target.value.toLowerCase())}
-            placeholder="oud-royale"
-            className={inputClass}
-          />
-        </div>
+      {/* Marca + género */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className={labelClass}>Marca</label>
           <input
@@ -150,64 +183,36 @@ export function CatalogoWebFields({ value, onChange }: Props) {
         </div>
       </div>
 
-      {/* Descripciones */}
-      <div className="grid grid-cols-1 gap-4 mb-4">
-        <div>
-          <label className={labelClass}>Descripción corta (card)</label>
-          <input
-            type="text"
-            value={value.descripcion_corta}
-            onChange={(e) => set("descripcion_corta", e.target.value)}
-            placeholder="Una línea para la tarjeta del catálogo"
-            className={inputClass}
-            maxLength={200}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Descripción larga (detalle)</label>
-          <textarea
-            value={value.descripcion_web}
-            onChange={(e) => set("descripcion_web", e.target.value)}
-            placeholder="Texto completo del producto en la página de detalle"
-            className={`${inputClass} min-h-[100px]`}
-          />
-        </div>
-      </div>
-
-      {/* Precios web */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className={labelClass}>Precio web (Gs.)</label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={value.precio_web}
-            onChange={(e) => set("precio_web", e.target.value)}
-            placeholder="Vacío = usa precio_venta"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Precio oferta (Gs.)</label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={value.precio_oferta}
-            onChange={(e) => set("precio_oferta", e.target.value)}
-            placeholder="Si hay promo, este precio reemplaza al web"
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Oferta hasta</label>
-          <input
-            type="datetime-local"
-            value={value.oferta_hasta}
-            onChange={(e) => set("oferta_hasta", e.target.value)}
-            className={inputClass}
-          />
+      {/* Precio informativo + oferta */}
+      <div className="border border-slate-200 rounded-lg bg-slate-50 p-4 mb-4">
+        <p className="text-xs text-slate-600 mb-3">
+          <strong>Precio normal web</strong> se toma automáticamente del{" "}
+          <em>Precio de venta</em> cargado arriba:{" "}
+          <span className="font-semibold text-slate-800">{fmtGs(precioVenta)}</span>
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className={labelClass}>Precio de oferta (Gs.)</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={value.precio_oferta}
+              onChange={(e) => set("precio_oferta", e.target.value)}
+              placeholder="Vacío = sin oferta"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Oferta hasta</label>
+            <input
+              type="datetime-local"
+              value={value.oferta_hasta}
+              onChange={(e) => set("oferta_hasta", e.target.value)}
+              className={inputClass}
+            />
+            <p className="text-xs text-slate-500 mt-1">Si vence, vuelve al precio normal.</p>
+          </div>
         </div>
       </div>
 
@@ -253,6 +258,30 @@ export function CatalogoWebFields({ value, onChange }: Props) {
             onChange={(e) => set("orden_web", e.target.value)}
             placeholder="Más bajo = primero"
             className={inputClass}
+          />
+        </div>
+      </div>
+
+      {/* Descripciones */}
+      <div className="grid grid-cols-1 gap-4 mb-4">
+        <div>
+          <label className={labelClass}>Descripción corta (card)</label>
+          <input
+            type="text"
+            value={value.descripcion_corta}
+            onChange={(e) => set("descripcion_corta", e.target.value)}
+            placeholder="Una línea para la tarjeta del catálogo"
+            className={inputClass}
+            maxLength={200}
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Descripción larga (detalle)</label>
+          <textarea
+            value={value.descripcion_web}
+            onChange={(e) => set("descripcion_web", e.target.value)}
+            placeholder="Texto completo del producto en la página de detalle"
+            className={`${inputClass} min-h-[100px]`}
           />
         </div>
       </div>
@@ -312,6 +341,9 @@ export function CatalogoWebFields({ value, onChange }: Props) {
  *   - números vacíos → null
  *   - genero "" → null
  *   - notas_top_csv / heart / base → arrays de strings recortados
+ *
+ * `precio_web` se mantiene en el payload por compatibilidad (campo legacy en DB),
+ * pero NO se setea desde la UI — siempre null. El cliente público usa precio_venta.
  */
 export function catalogoWebToPayload(s: CatalogoWebState) {
   const num = (v: string): number | null => {
@@ -323,8 +355,8 @@ export function catalogoWebToPayload(s: CatalogoWebState) {
   const csv = (v: string): string[] =>
     v
       .split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0);
 
   return {
     slug_web: s.slug_web.trim() || null,
@@ -333,7 +365,8 @@ export function catalogoWebToPayload(s: CatalogoWebState) {
     descripcion_corta: s.descripcion_corta.trim() || null,
     descripcion_web: s.descripcion_web.trim() || null,
     marca: s.marca.trim() || null,
-    precio_web: num(s.precio_web),
+    /** Elevate no usa precio_web — la web toma precio_venta directo. */
+    precio_web: null,
     precio_oferta: num(s.precio_oferta),
     oferta_hasta: s.oferta_hasta || null,
     nuevo_hasta: s.nuevo_hasta || null,
