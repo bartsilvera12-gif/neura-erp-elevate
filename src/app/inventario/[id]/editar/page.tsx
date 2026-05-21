@@ -8,6 +8,12 @@ import { getProducto, productoExiste, updateProducto } from "@/lib/inventario/st
 import type { MetodoValuacion } from "@/lib/inventario/types";
 import ProductImageUploader from "@/components/inventario/ProductImageUploader";
 import SelectFromList from "@/components/inventario/SelectFromList";
+import {
+  CatalogoWebFields,
+  catalogoWebToPayload,
+  emptyCatalogoWeb,
+  type CatalogoWebState,
+} from "@/components/inventario/CatalogoWebFields";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -46,16 +52,16 @@ export default function EditarProductoPage() {
   const [ubicacionId, setUbicacionId] = useState<string | null>(null);
   const [proveedorId, setProveedorId] = useState<string | null>(null);
 
-  // Sección "Web pública" (Fase 1)
-  const [formWeb, setFormWeb] = useState({
-    visible_web: false,
-    destacado_web: false,
-    slug_web: "",
-    marca: "",
-    precio_web: "",
-    descripcion_corta: "",
-    descripcion_web: "",
-  });
+  // Catálogo web (Fase 1 catálogo enriquecido)
+  const [catWeb, setCatWeb] = useState<CatalogoWebState>(emptyCatalogoWeb);
+  // Snapshot inicial de familia + notas para detectar cambios y NO borrar
+  // accidentalmente datos existentes al guardar.
+  const [extrasOriginal, setExtrasOriginal] = useState<{
+    familia: string;
+    top: string;
+    heart: string;
+    base: string;
+  } | null>(null);
   function slugify(input: string): string {
     return input
       .normalize("NFD")
@@ -146,15 +152,61 @@ export default function EditarProductoPage() {
       setCategoriaId(p.categoria_principal_id ?? null);
       setUbicacionId(p.ubicacion_principal_id ?? null);
       setProveedorId(p.proveedor_principal_id ?? null);
-      setFormWeb({
+      // Catálogo web: hidratar todos los campos enriquecidos del producto
+      const fmtDt = (s: string | null | undefined) =>
+        s ? new Date(s).toISOString().slice(0, 16) : "";
+      const fmtDate = (s: string | null | undefined) => (s ? s.slice(0, 10) : "");
+      setCatWeb({
+        slug_web: p.slug_web ?? "",
         visible_web: p.visible_web === true,
         destacado_web: p.destacado_web === true,
-        slug_web: p.slug_web ?? "",
-        marca: p.marca ?? "",
-        precio_web: p.precio_web == null ? "" : String(p.precio_web),
         descripcion_corta: p.descripcion_corta ?? "",
         descripcion_web: p.descripcion_web ?? "",
+        marca: p.marca ?? "",
+        precio_web: p.precio_web == null ? "" : String(p.precio_web),
+        precio_oferta: p.precio_oferta == null ? "" : String(p.precio_oferta),
+        oferta_hasta: fmtDt(p.oferta_hasta),
+        nuevo_hasta: fmtDate(p.nuevo_hasta),
+        concentracion: p.concentracion ?? "",
+        volumen_ml: p.volumen_ml == null ? "" : String(p.volumen_ml),
+        genero: (p.genero === "masculino" || p.genero === "femenino" || p.genero === "unisex") ? p.genero : "",
+        proximamente: p.proximamente === true,
+        orden_web: p.orden_web == null ? "" : String(p.orden_web),
+        // familia + notas se hidratan en un segundo fetch a /catalogo-extras
+        familia_olfativa_nombre: "",
+        notas_top_csv: "",
+        notas_heart_csv: "",
+        notas_base_csv: "",
       });
+
+      // Hidratar familia + notas
+      fetch(`/api/productos/${encodeURIComponent(id)}/catalogo-extras`, {
+        credentials: "include",
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled || !j?.success) return;
+          const d = j.data as {
+            familia_olfativa_nombre: string | null;
+            notas_top: string[];
+            notas_heart: string[];
+            notas_base: string[];
+          };
+          const familia = d.familia_olfativa_nombre ?? "";
+          const top = (d.notas_top ?? []).join(", ");
+          const heart = (d.notas_heart ?? []).join(", ");
+          const base = (d.notas_base ?? []).join(", ");
+          setCatWeb((prev) => ({
+            ...prev,
+            familia_olfativa_nombre: familia,
+            notas_top_csv: top,
+            notas_heart_csv: heart,
+            notas_base_csv: base,
+          }));
+          setExtrasOriginal({ familia, top, heart, base });
+        })
+        .catch(() => undefined);
     }).finally(() => {
       if (!cancelled) setCargando(false);
     });
@@ -254,9 +306,10 @@ export default function EditarProductoPage() {
       // - Si quedo vacio -> codigo_barras = null, codigo_barras_interno = false.
       //   (No auto-regeneramos en edicion: evita sorprender al usuario.)
       const cambioCodigo = codigoIngresado !== (codigoOriginal ?? "");
-      const slugEfectivo = formWeb.slug_web.trim()
-        ? slugify(formWeb.slug_web)
-        : formWeb.visible_web ? slugify(form.nombre) : "";
+      const cw = catalogoWebToPayload(catWeb);
+      const slugEfectivo = cw.slug_web
+        ? slugify(cw.slug_web)
+        : cw.visible_web ? slugify(form.nombre) : null;
       const updatePayload: Parameters<typeof updateProducto>[1] = {
         nombre: form.nombre.trim().toUpperCase(),
         sku: form.sku.trim().toUpperCase(),
@@ -269,19 +322,26 @@ export default function EditarProductoPage() {
         categoria_principal_id: categoriaId,
         ubicacion_principal_id: ubicacionId,
         proveedor_principal_id: proveedorId,
-        visible_web: formWeb.visible_web,
-        destacado_web: formWeb.destacado_web,
-        slug_web: slugEfectivo || null,
-        marca: formWeb.marca.trim() || null,
-        descripcion_corta: formWeb.descripcion_corta.trim() || null,
-        descripcion_web: formWeb.descripcion_web.trim() || null,
-        precio_web: formWeb.precio_web.trim() === "" ? null : parseFloat(formWeb.precio_web) || null,
+        // Catálogo web (Fase 1)
+        slug_web: slugEfectivo,
+        visible_web: cw.visible_web,
+        destacado_web: cw.destacado_web,
+        marca: cw.marca,
+        descripcion_corta: cw.descripcion_corta,
+        descripcion_web: cw.descripcion_web,
+        precio_web: cw.precio_web,
+        // Catálogo enriquecido
+        precio_oferta: cw.precio_oferta,
+        oferta_hasta: cw.oferta_hasta,
+        nuevo_hasta: cw.nuevo_hasta,
+        concentracion: cw.concentracion,
+        volumen_ml: cw.volumen_ml,
+        genero: cw.genero,
+        proximamente: cw.proximamente,
+        orden_web: cw.orden_web,
       };
       if (cambioCodigo) {
         updatePayload.codigo_barras = codigoIngresado || null;
-        // Si el codigo arranca con INT-, asumimos que es interno (generado por el sistema).
-        // Si el usuario marco form.codigo_barras_interno (clic en "Generar código interno"),
-        // tambien respetar esa marca. Caso contrario, manual.
         updatePayload.codigo_barras_interno =
           codigoIngresado.length > 0 &&
           (form.codigo_barras_interno === true || /^INT-/i.test(codigoIngresado));
@@ -290,6 +350,41 @@ export default function EditarProductoPage() {
       try {
         const actualizado = await updateProducto(id, updatePayload);
         if (actualizado) {
+          // Familia + notas: solo enviar lo que cambió respecto al snapshot
+          // inicial, para NO borrar accidentalmente datos existentes.
+          const extrasBody: Record<string, unknown> = {};
+          if (extrasOriginal) {
+            if (cw.familia_olfativa_nombre !== (extrasOriginal.familia || null)) {
+              extrasBody.familia_olfativa_nombre = cw.familia_olfativa_nombre;
+            }
+            if (catWeb.notas_top_csv.trim() !== extrasOriginal.top) {
+              extrasBody.notas_top = cw.notas_top;
+            }
+            if (catWeb.notas_heart_csv.trim() !== extrasOriginal.heart) {
+              extrasBody.notas_heart = cw.notas_heart;
+            }
+            if (catWeb.notas_base_csv.trim() !== extrasOriginal.base) {
+              extrasBody.notas_base = cw.notas_base;
+            }
+          } else {
+            // Sin snapshot (raro): si el usuario completó algo, mandar.
+            if (cw.familia_olfativa_nombre) extrasBody.familia_olfativa_nombre = cw.familia_olfativa_nombre;
+            if (cw.notas_top.length) extrasBody.notas_top = cw.notas_top;
+            if (cw.notas_heart.length) extrasBody.notas_heart = cw.notas_heart;
+            if (cw.notas_base.length) extrasBody.notas_base = cw.notas_base;
+          }
+          if (Object.keys(extrasBody).length > 0) {
+            try {
+              await fetch(`/api/productos/${encodeURIComponent(id)}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(extrasBody),
+                credentials: "include",
+              });
+            } catch (e) {
+              console.warn("[editar producto] catálogo extras fallaron", e);
+            }
+          }
           router.push("/inventario");
         } else {
           setErrorGeneral("No se pudo guardar los cambios. Revisá los datos e intentá nuevamente.");
@@ -599,85 +694,7 @@ export default function EditarProductoPage() {
             </select>
           </div>
 
-          <div className="border-t border-gray-200 pt-6 mt-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-1">Web pública</h2>
-            <p className="text-xs text-gray-500 mb-4">
-              Si <strong>Visible en web</strong> está activo, este producto aparece en el catálogo
-              público (<code>/api/public/elevate/productos</code>). Si el slug queda vacío, se
-              genera automáticamente desde el nombre al guardar.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={formWeb.visible_web}
-                  onChange={(e) => setFormWeb((p) => ({ ...p, visible_web: e.target.checked }))}
-                />
-                Visible en web
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={formWeb.destacado_web}
-                  onChange={(e) => setFormWeb((p) => ({ ...p, destacado_web: e.target.checked }))}
-                />
-                Destacado en home
-              </label>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className={labelClass}>Slug web (URL)</label>
-                <input
-                  type="text"
-                  value={formWeb.slug_web}
-                  onChange={(e) => setFormWeb((p) => ({ ...p, slug_web: e.target.value }))}
-                  placeholder="ej: dior-sauvage-100ml"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Marca</label>
-                <input
-                  type="text"
-                  value={formWeb.marca}
-                  onChange={(e) => setFormWeb((p) => ({ ...p, marca: e.target.value }))}
-                  placeholder="ej: Dior"
-                  className={inputClass}
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <label className={labelClass}>Precio web (Gs.) — opcional</label>
-              <input
-                type="number"
-                step="1"
-                min="0"
-                value={formWeb.precio_web}
-                onChange={(e) => setFormWeb((p) => ({ ...p, precio_web: e.target.value }))}
-                placeholder="Si se deja vacío, la web usa el precio de venta"
-                className={inputClass}
-              />
-            </div>
-            <div className="mt-4">
-              <label className={labelClass}>Descripción corta (tarjeta)</label>
-              <input
-                type="text"
-                value={formWeb.descripcion_corta}
-                onChange={(e) => setFormWeb((p) => ({ ...p, descripcion_corta: e.target.value }))}
-                maxLength={200}
-                className={inputClass}
-              />
-            </div>
-            <div className="mt-4">
-              <label className={labelClass}>Descripción web (detalle)</label>
-              <textarea
-                value={formWeb.descripcion_web}
-                onChange={(e) => setFormWeb((p) => ({ ...p, descripcion_web: e.target.value }))}
-                rows={5}
-                className={inputClass}
-              />
-            </div>
-          </div>
+          <CatalogoWebFields value={catWeb} onChange={setCatWeb} />
 
           <div className="flex gap-4 pt-2">
             <button

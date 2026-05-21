@@ -4,10 +4,14 @@ import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema"
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import {
-  updateProductoPg,
   rowToProductoApi,
   DuplicadoError,
 } from "@/lib/inventario/server/productos-pg";
+import {
+  existsInTenantPostgrest,
+  updateProductoPostgrest,
+  setCategoriaPrincipalPostgrest,
+} from "@/lib/inventario/server/productos-postgrest";
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 import { syncCatalogoExtras } from "@/lib/inventario/server/catalogo-web-extras";
 
@@ -58,8 +62,12 @@ export async function GET(
     return NextResponse.json(errorResponse("No se pudo cargar el producto."), { status: 500 });
   }
 }
-import { setCategoriaPrincipal } from "@/lib/inventario/server/catalogos-pg";
 import { normalizeUpperText, normalizeUpperCodigoBarras } from "@/lib/text/normalize";
+
+/**
+ * Legacy pool-based existsInTenant — quedó como referencia. NO usar en
+ * runtime web. Mantenido para no romper imports indirectos si los hubiera.
+ */
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 
@@ -83,9 +91,8 @@ async function existsInTenant(
 /**
  * PATCH /api/productos/[id]
  *
- * Actualizacion parcial via PG directo (soporta tenants no expuestos).
- * Aplica solo los campos presentes en el body. La capa PG valida ownership
- * (id + empresa_id en el WHERE).
+ * Update parcial vía PostgREST HTTPS con JWT del usuario. RLS por empresa
+ * cubre ownership. Aplica solo los campos presentes en el body.
  */
 export async function PATCH(
   request: NextRequest,
@@ -98,7 +105,7 @@ export async function PATCH(
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const empresaId = ctx.auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
+    const jwt = await getAccessTokenForRequest(request);
 
     let body: Record<string, unknown>;
     try {
@@ -107,7 +114,7 @@ export async function PATCH(
       return NextResponse.json(errorResponse("JSON inválido."), { status: 400 });
     }
 
-    const patch: Parameters<typeof updateProductoPg>[3] = {};
+    const patch: Parameters<typeof updateProductoPostgrest>[3] = {};
     if (body.nombre !== undefined) patch.nombre = normalizeUpperText(body.nombre);
     if (body.sku !== undefined) patch.sku = normalizeUpperText(body.sku);
     if (body.costo_promedio !== undefined) patch.costo_promedio = Number(body.costo_promedio) || 0;
@@ -139,7 +146,7 @@ export async function PATCH(
     let categoriaNueva: string | null = null;
     if (body.categoria_principal_id !== undefined) {
       const v = body.categoria_principal_id == null ? null : String(body.categoria_principal_id);
-      if (v && !(await existsInTenant(schema, empresaId, "categorias_productos", v))) {
+      if (v && !(await existsInTenantPostgrest(jwt, empresaId, "categorias_productos", v))) {
         return NextResponse.json(errorResponse("La categoría seleccionada no existe."), { status: 400 });
       }
       patch.categoria_principal_id = v;
@@ -148,14 +155,14 @@ export async function PATCH(
     }
     if (body.ubicacion_principal_id !== undefined) {
       const v = body.ubicacion_principal_id == null ? null : String(body.ubicacion_principal_id);
-      if (v && !(await existsInTenant(schema, empresaId, "inventario_ubicaciones", v))) {
+      if (v && !(await existsInTenantPostgrest(jwt, empresaId, "inventario_ubicaciones", v))) {
         return NextResponse.json(errorResponse("La ubicación seleccionada no existe."), { status: 400 });
       }
       patch.ubicacion_principal_id = v;
     }
     if (body.proveedor_principal_id !== undefined) {
       const v = body.proveedor_principal_id == null ? null : String(body.proveedor_principal_id);
-      if (v && !(await existsInTenant(schema, empresaId, "proveedores", v))) {
+      if (v && !(await existsInTenantPostgrest(jwt, empresaId, "proveedores", v))) {
         return NextResponse.json(errorResponse("El proveedor seleccionado no existe."), { status: 400 });
       }
       patch.proveedor_principal_id = v;
@@ -216,7 +223,7 @@ export async function PATCH(
     }
 
     try {
-      const row = await updateProductoPg(schema, empresaId, id, patch);
+      const row = await updateProductoPostgrest(jwt, empresaId, id, patch);
       if (!row) {
         return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
       }
@@ -232,7 +239,6 @@ export async function PATCH(
               ? body.familia_olfativa_nombre.trim() || null
               : null
             : undefined;
-          const jwt = await getAccessTokenForRequest(request);
           await syncCatalogoExtras(jwt, empresaId, id, {
             familia_nombre: familiaNombre,
             notas_top: body.notas_top !== undefined ? arr(body.notas_top) : undefined,
@@ -242,7 +248,7 @@ export async function PATCH(
         }
       } catch (err) {
         console.error("[/api/productos/[id]] syncCatalogoExtras fallo", {
-          schema, empresaId, id,
+          empresaId, id,
           message: err instanceof Error ? err.message : String(err),
         });
       }
@@ -250,10 +256,10 @@ export async function PATCH(
       // Sincronizar categoria principal en puente producto_categorias
       if (categoriaCambia) {
         try {
-          await setCategoriaPrincipal(schema, empresaId, id, categoriaNueva);
+          await setCategoriaPrincipalPostgrest(jwt, empresaId, id, categoriaNueva);
         } catch (err) {
           console.error("[/api/productos/[id]] setCategoriaPrincipal fallo", {
-            schema, empresaId, id,
+            empresaId, id,
             message: err instanceof Error ? err.message : String(err),
           });
         }
@@ -264,7 +270,6 @@ export async function PATCH(
         return NextResponse.json(errorResponse(err.message), { status: 409 });
       }
       console.error("[/api/productos/[id] PATCH]", {
-        schema,
         empresaId,
         id,
         message: err instanceof Error ? err.message : String(err),
