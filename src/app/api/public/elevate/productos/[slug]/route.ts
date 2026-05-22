@@ -35,9 +35,16 @@ const PUBLIC_DETAIL_SELECT =
   "genero," +
   "orden_web," +
   "familia:familias_olfativas(nombre,descripcion)," +
+  "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "notas:producto_notas(posicion,orden,nota:notas_olfativas(nombre))";
 
 type FamiliaRef = { nombre: string | null; descripcion: string | null } | null;
+type CategoriaRef = {
+  nombre: string | null;
+  slug_web: string | null;
+  visible_web: boolean | null;
+  activo: boolean | null;
+} | null;
 type NotaRow = {
   posicion: "top" | "heart" | "base";
   orden: number | null;
@@ -66,6 +73,7 @@ type ProductoDetalleRaw = {
   genero: string | null;
   orden_web: number | null;
   familia: FamiliaRef;
+  categoria: CategoriaRef;
   notas: NotaRow[] | null;
 };
 
@@ -140,6 +148,14 @@ function toDetalle(r: ProductoDetalleRaw) {
     volumen_ml: r.volumen_ml,
     genero: r.genero,
     familia_olfativa: r.familia?.nombre ?? null,
+    categoria_nombre:
+      r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
+        ? r.categoria.nombre ?? null
+        : null,
+    categoria_slug:
+      r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
+        ? r.categoria.slug_web ?? null
+        : null,
     notas_top: pickNotas(r.notas, "top"),
     notas_heart: pickNotas(r.notas, "heart"),
     notas_base: pickNotas(r.notas, "base"),

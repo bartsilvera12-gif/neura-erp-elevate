@@ -4,22 +4,30 @@ import { useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 import { ProductCard } from "@/components/elevate-public/ProductCard";
 import { SectionTitle } from "@/components/elevate-public/SectionTitle";
-import type { Product, ProductCategory } from "@/lib/elevate-public/products-mock";
+import type { Product } from "@/lib/elevate-public/products-mock";
+import type { CategoriaWeb } from "@/lib/elevate-public/catalog-fetch";
 
-const CATEGORIES: (ProductCategory | "Todos")[] = [
-  "Todos",
-  "Nicho",
-  "Ultranicho",
-  "Diseñador",
-  "Árabe Premium",
-];
 const FILTERS = ["Todos", "Más vendidos", "Promociones", "Nuevos", "En stock"] as const;
 
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-export function CatalogClient({ products }: { products: Product[] }) {
-  const [cat, setCat] = useState<(typeof CATEGORIES)[number]>("Todos");
+type CategoryTab = "Todos" | string;
+
+export function CatalogClient({
+  products,
+  categorias,
+}: {
+  products: Product[];
+  categorias: CategoriaWeb[];
+}) {
+  // "Todos" siempre presente. El resto sale de DB con orden_web.
+  const categoryTabs: CategoryTab[] = [
+    "Todos",
+    ...categorias.map((c) => c.nombre),
+  ];
+
+  const [cat, setCat] = useState<CategoryTab>("Todos");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Todos");
   const [query, setQuery] = useState("");
 
@@ -90,7 +98,7 @@ export function CatalogClient({ products }: { products: Product[] }) {
           </div>
 
           <div className="mt-10 flex flex-wrap justify-center gap-2 md:gap-3">
-            {CATEGORIES.map((c) => (
+            {categoryTabs.map((c) => (
               <button
                 key={c}
                 type="button"

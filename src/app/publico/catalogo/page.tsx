@@ -1,4 +1,4 @@
-import { fetchCatalog } from "@/lib/elevate-public/catalog-fetch";
+import { fetchCatalog, fetchCategoriasPublic } from "@/lib/elevate-public/catalog-fetch";
 import { CatalogClient } from "./CatalogClient";
 
 export const metadata = {
@@ -19,6 +19,9 @@ export const dynamic = "force-dynamic";
  * (CatalogClient) recibe la lista ya resuelta y maneja filtros + búsqueda.
  */
 export default async function CatalogoPage() {
-  const { products } = await fetchCatalog();
-  return <CatalogClient products={products} />;
+  const [{ products }, categorias] = await Promise.all([
+    fetchCatalog(),
+    fetchCategoriasPublic(),
+  ]);
+  return <CatalogClient products={products} categorias={categorias} />;
 }

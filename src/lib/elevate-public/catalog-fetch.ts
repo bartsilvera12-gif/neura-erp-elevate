@@ -38,8 +38,22 @@ type ApiListaProducto = {
   volumen_ml: number | null;
   genero: string | null;
   familia_olfativa: string | null;
+  /** Categoría web real desde DB (Fase 1 catálogo administrable). Null si el
+   *  producto aún no tiene categoria_principal_id asignada. */
+  categoria_nombre?: string | null;
+  categoria_slug?: string | null;
   orden_web: number | null;
 };
+
+/** Set canónico de las 4 categorías esperadas del mock (case-insensitive). */
+const KNOWN_CATEGORIES: ProductCategory[] = ["Nicho", "Ultranicho", "Diseñador", "Árabe Premium"];
+
+function normalizeCategoryName(name: string | null | undefined): ProductCategory | null {
+  if (!name) return null;
+  const lower = name.trim().toLowerCase();
+  const match = KNOWN_CATEGORIES.find((c) => c.toLowerCase() === lower);
+  return match ?? null;
+}
 
 export type ApiDetalleProducto = ApiListaProducto & {
   descripcion_web: string | null;
@@ -81,12 +95,20 @@ function buildSize(volumen_ml: number | null): string {
  */
 export function apiToMockProduct(api: ApiListaProducto): Product {
   const fromMock = mockProducts.find((m) => m.slug === api.slug);
+  // Resolución de categoría:
+  //   1. La que viene de DB vía categoria_nombre (Fase 1 catálogo web).
+  //   2. Fallback al mock por slug (compat con productos seed).
+  //   3. Inferencia legacy por marca (defaultCategoryFor) — temporal mientras
+  //      productos sin categoria_principal_id se van migrando.
+  const categoriaDb = normalizeCategoryName(api.categoria_nombre ?? null);
+  const category: ProductCategory =
+    categoriaDb ?? fromMock?.category ?? defaultCategoryFor(api.marca);
   return {
     id: api.id,
     slug: api.slug ?? "",
     name: api.nombre ?? "",
     brand: api.marca ?? "",
-    category: fromMock?.category ?? defaultCategoryFor(api.marca),
+    category,
     type: api.familia_olfativa ?? fromMock?.type ?? "",
     price: api.precio,
     oldPrice: api.precio_anterior ?? undefined,
@@ -218,4 +240,40 @@ function applyFallback(params?: {
   if (params?.nuevos) list = list.filter((p) => p.isNew);
   if (params?.promos) list = list.filter((p) => p.oldPrice != null);
   return list;
+}
+
+// ─── Categorías web (Fase 1 catálogo administrable) ──────────────────────
+
+export type CategoriaWeb = {
+  id: string;
+  nombre: string;
+  slug: string | null;
+  descripcion: string | null;
+  orden: number | null;
+};
+
+/**
+ * Listado de categorías visibles del catálogo público. API primaria; si falla,
+ * devolvemos el set legacy hardcodeado para no romper el filtro.
+ */
+export async function fetchCategoriasPublic(): Promise<CategoriaWeb[]> {
+  const fallback: CategoriaWeb[] = [
+    { id: "fb-nicho", nombre: "Nicho", slug: "nicho", descripcion: null, orden: 10 },
+    { id: "fb-ultra", nombre: "Ultranicho", slug: "ultranicho", descripcion: null, orden: 20 },
+    { id: "fb-dise", nombre: "Diseñador", slug: "disenador", descripcion: null, orden: 30 },
+    { id: "fb-arab", nombre: "Árabe Premium", slug: "arabe-premium", descripcion: null, orden: 40 },
+  ];
+  try {
+    const origin = await getOrigin();
+    const r = await fetchWithTimeout(`${origin}/api/public/elevate/categorias`, {
+      next: { revalidate: 60 },
+    });
+    if (!r.ok) return fallback;
+    const data = (await r.json()) as { categorias?: CategoriaWeb[] };
+    const list = Array.isArray(data.categorias) ? data.categorias : [];
+    if (list.length === 0) return fallback;
+    return list;
+  } catch {
+    return fallback;
+  }
 }

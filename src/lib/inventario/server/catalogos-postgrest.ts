@@ -26,10 +26,16 @@ export interface CategoriaProductoRow {
   activo: boolean;
   created_at: string;
   updated_at: string;
+  // Campos catálogo web (Fase 1)
+  slug_web: string | null;
+  visible_web: boolean;
+  orden_web: number | null;
+  descripcion_web: string | null;
 }
 
 const CATEGORIA_COLS =
-  "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at";
+  "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at," +
+  "slug_web,visible_web,orden_web,descripcion_web";
 
 const TIPOS_UBICACION = [
   "deposito",
@@ -96,6 +102,10 @@ export async function insertCategoriaProductoPostgrest(
     descripcion?: string | null;
     parent_id?: string | null;
     activo?: boolean;
+    slug_web?: string | null;
+    visible_web?: boolean;
+    orden_web?: number | null;
+    descripcion_web?: string | null;
   }
 ): Promise<CategoriaProductoRow> {
   const body: Record<string, unknown> = {
@@ -105,6 +115,10 @@ export async function insertCategoriaProductoPostgrest(
     descripcion: d.descripcion?.trim() || null,
     parent_id: d.parent_id || null,
     activo: d.activo ?? true,
+    slug_web: d.slug_web?.trim() || null,
+    visible_web: d.visible_web ?? true,
+    orden_web: typeof d.orden_web === "number" ? d.orden_web : null,
+    descripcion_web: d.descripcion_web?.trim() || null,
   };
   const r = await postgrestRequest<CategoriaProductoRow>(
     "categorias_productos",
@@ -138,6 +152,10 @@ export async function updateCategoriaProductoPostgrest(
     descripcion: string | null;
     parent_id: string | null;
     activo: boolean;
+    slug_web: string | null;
+    visible_web: boolean;
+    orden_web: number | null;
+    descripcion_web: string | null;
   }>
 ): Promise<CategoriaProductoRow | null> {
   const body: Record<string, unknown> = {};
@@ -146,6 +164,10 @@ export async function updateCategoriaProductoPostgrest(
   if (patch.descripcion !== undefined) body.descripcion = patch.descripcion?.trim() || null;
   if (patch.parent_id !== undefined) body.parent_id = patch.parent_id || null;
   if (patch.activo !== undefined) body.activo = patch.activo;
+  if (patch.slug_web !== undefined) body.slug_web = patch.slug_web?.trim() || null;
+  if (patch.visible_web !== undefined) body.visible_web = patch.visible_web;
+  if (patch.orden_web !== undefined) body.orden_web = patch.orden_web;
+  if (patch.descripcion_web !== undefined) body.descripcion_web = patch.descripcion_web?.trim() || null;
   if (Object.keys(body).length === 0) return null;
 
   const qs = new URLSearchParams({

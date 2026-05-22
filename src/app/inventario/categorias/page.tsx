@@ -13,6 +13,21 @@ interface Categoria {
   descripcion: string | null;
   parent_id: string | null;
   activo: boolean;
+  // Catálogo web (Fase 1)
+  slug_web: string | null;
+  visible_web: boolean;
+  orden_web: number | null;
+  descripcion_web: string | null;
+}
+
+function slugify(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
 }
 
 export default function CategoriasProductosPage() {
@@ -82,6 +97,18 @@ export default function CategoriasProductosPage() {
     });
     const j = await r.json();
     if (r.ok && j?.success) load();
+    else setError(j?.error ?? "No se pudo actualizar.");
+  }
+
+  async function patchCategoria(id: string, patch: Record<string, unknown>) {
+    const r = await fetch(`/api/inventario/categorias/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(patch),
+    });
+    const j = await r.json();
+    if (r.ok && j?.success) await load();
     else setError(j?.error ?? "No se pudo actualizar.");
   }
 
@@ -178,8 +205,10 @@ export default function CategoriasProductosPage() {
             <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wide">
               <tr>
                 <th className="text-left px-4 py-2">Nombre</th>
-                <th className="text-left px-4 py-2">Código</th>
+                <th className="text-left px-4 py-2">Slug web</th>
                 <th className="text-left px-4 py-2">Padre</th>
+                <th className="text-left px-4 py-2">Orden web</th>
+                <th className="text-left px-4 py-2">Visible web</th>
                 <th className="text-left px-4 py-2">Estado</th>
                 <th className="px-4 py-2"></th>
               </tr>
@@ -190,8 +219,38 @@ export default function CategoriasProductosPage() {
                 return (
                   <tr key={c.id} className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium">{c.nombre}</td>
-                    <td className="px-4 py-2 text-gray-500">{c.codigo ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <input
+                        defaultValue={c.slug_web ?? ""}
+                        placeholder={slugify(c.nombre)}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v !== (c.slug_web ?? "")) patchCategoria(c.id, { slug_web: v || null });
+                        }}
+                        className="w-32 border border-slate-200 rounded px-2 py-1 text-xs"
+                      />
+                    </td>
                     <td className="px-4 py-2 text-gray-500">{parent?.nombre ?? "—"}</td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        defaultValue={c.orden_web ?? ""}
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          const next = v === "" ? null : Number(v);
+                          if (next !== (c.orden_web ?? null)) patchCategoria(c.id, { orden_web: next });
+                        }}
+                        className="w-20 border border-slate-200 rounded px-2 py-1 text-xs"
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <button
+                        onClick={() => patchCategoria(c.id, { visible_web: !c.visible_web })}
+                        className={`text-xs px-2 py-0.5 rounded ${c.visible_web ? "bg-sky-100 text-sky-700" : "bg-gray-100 text-gray-500"}`}
+                      >
+                        {c.visible_web ? "Visible" : "Oculta"}
+                      </button>
+                    </td>
                     <td className="px-4 py-2">
                       {c.activo ? (
                         <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Activo</span>

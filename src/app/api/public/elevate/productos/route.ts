@@ -55,9 +55,16 @@ const PUBLIC_SELECT =
   "volumen_ml," +
   "genero," +
   "orden_web," +
-  "familia:familias_olfativas(nombre)";
+  "familia:familias_olfativas(nombre)," +
+  "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)";
 
 type FamiliaRef = { nombre: string | null } | null;
+type CategoriaRef = {
+  nombre: string | null;
+  slug_web: string | null;
+  visible_web: boolean | null;
+  activo: boolean | null;
+} | null;
 
 type ProductoRaw = {
   id: string;
@@ -80,6 +87,7 @@ type ProductoRaw = {
   genero: string | null;
   orden_web: number | null;
   familia: FamiliaRef;
+  categoria: CategoriaRef;
 };
 
 export type ProductoPublico = {
@@ -102,6 +110,8 @@ export type ProductoPublico = {
   volumen_ml: number | null;
   genero: string | null;
   familia_olfativa: string | null;
+  categoria_nombre: string | null;
+  categoria_slug: string | null;
   orden_web: number | null;
 };
 
@@ -169,6 +179,15 @@ export function toPublico(r: ProductoRaw): ProductoPublico {
     volumen_ml: r.volumen_ml,
     genero: r.genero,
     familia_olfativa: r.familia?.nombre ?? null,
+    // Solo exponemos la categoría real si está visible/activa.
+    categoria_nombre:
+      r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
+        ? r.categoria.nombre ?? null
+        : null,
+    categoria_slug:
+      r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
+        ? r.categoria.slug_web ?? null
+        : null,
     orden_web: r.orden_web,
   };
 }

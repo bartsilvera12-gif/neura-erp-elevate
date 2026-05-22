@@ -7,7 +7,8 @@ import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
 const CATEGORIAS_COLS =
-  "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at";
+  "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at," +
+  "slug_web,visible_web,orden_web,descripcion_web";
 
 export async function GET(request: NextRequest) {
   try {
@@ -49,12 +50,21 @@ export async function POST(request: NextRequest) {
     const nombre = normalizeUpperText(body.nombre);
     if (!nombre) return NextResponse.json(errorResponse("El nombre es obligatorio."), { status: 400 });
     try {
+      const slugWebRaw = typeof body.slug_web === "string" ? body.slug_web.trim() : null;
+      const ordenWebRaw = body.orden_web;
+      const ordenWeb = typeof ordenWebRaw === "number" && Number.isFinite(ordenWebRaw)
+        ? Math.trunc(ordenWebRaw)
+        : null;
       const row = await insertCategoriaProductoPostgrest(jwt, ctx.auth.empresa_id, {
         nombre,
         codigo: normalizeUpperNullable(body.codigo),
         descripcion: normalizeUpperNullable(body.descripcion),
         parent_id: body.parent_id == null ? null : String(body.parent_id),
         activo: body.activo === false ? false : true,
+        slug_web: slugWebRaw || null,
+        visible_web: body.visible_web === false ? false : true,
+        orden_web: ordenWeb,
+        descripcion_web: typeof body.descripcion_web === "string" ? body.descripcion_web : null,
       });
       return NextResponse.json(successResponse({ categoria: row }));
     } catch (e) {
