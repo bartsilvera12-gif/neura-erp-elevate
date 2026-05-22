@@ -10,6 +10,7 @@ import {
   buildProductoImagenPath,
   ensureProductosImagenesBucket,
   pathBelongsToEmpresa,
+  publicProductoImagenUrl,
   signProductoImagen,
 } from "@/lib/inventario/imagen-storage";
 import {
@@ -145,12 +146,15 @@ export async function POST(
       );
     }
 
-    // 6) Persistir imagen_path via PostgREST
+    // 6) Persistir imagen_path + URL pública (bucket público) via PostgREST.
+    //    Guardar el URL en la propia columna evita depender de un grant
+    //    SELECT(imagen_path) extra para el rol anon del catálogo público.
+    const publicUrl = publicProductoImagenUrl(path);
     let updated;
     try {
       updated = await updateProductoPostgrest(jwt, empresaId, productoId, {
         imagen_path: path,
-        imagen_url: null,
+        imagen_url: publicUrl,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

@@ -24,7 +24,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { elevatePublicCorsHeaders, PUBLIC_CATALOG_CACHE } from "@/lib/public-api/cors";
 import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
-import { publicProductoImagenUrl } from "@/lib/inventario/imagen-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +42,6 @@ const PUBLIC_SELECT =
   "oferta_hasta," +
   "nuevo_hasta," +
   "imagen_url," +
-  "imagen_path," +
   "descripcion_corta," +
   "destacado:destacado_web," +
   "stock_actual," +
@@ -68,7 +66,6 @@ type ProductoRaw = {
   oferta_hasta: string | null;
   nuevo_hasta: string | null;
   imagen_url: string | null;
-  imagen_path: string | null;
   descripcion_corta: string | null;
   destacado: boolean | null;
   stock_actual: number | null;
@@ -157,7 +154,7 @@ export function toPublico(r: ProductoRaw): ProductoPublico {
     precio_anterior,
     precio_oferta: ofertaActiva ? r.precio_oferta : null,
     oferta_hasta: ofertaActiva ? r.oferta_hasta : null,
-    imagen_url: r.imagen_url ?? publicProductoImagenUrl(r.imagen_path),
+    imagen_url: r.imagen_url,
     descripcion_corta: r.descripcion_corta,
     destacado: r.destacado === true,
     disponible,
