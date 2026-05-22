@@ -167,13 +167,6 @@ export default function NuevoProductoPage() {
     setErrorGeneral(null);
 
     const codigoEnInput = form.codigo_barras.trim();
-    // Solo rechazar prefijo reservado si fue ESCRITO MANUALMENTE (no si vino del botón).
-    const esInternoManual =
-      !!codigoEnInput && /^ELE-PER-/i.test(codigoEnInput) && !codigoGeneradoInterno;
-    if (esInternoManual) {
-      setErrorGeneral('El prefijo "ELE-PER-" está reservado para códigos internos generados por el sistema. Dejá el campo vacío y guardá, o usá el botón "Generar código interno".');
-      return;
-    }
 
     const duplicado = await productoExiste(form.sku, form.nombre);
     if (duplicado) {
@@ -426,13 +419,13 @@ export default function NuevoProductoPage() {
             </div>
           </div>
 
-          {/* Código de barras / código interno */}
+          {/* Código de barras */}
           <div>
             <label className={labelClass}>
-              Código de barras / código interno
+              Código de barras
               {codigoGeneradoInterno && form.codigo_barras && (
                 <span className="ml-2 align-middle text-[10px] uppercase tracking-wider bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">
-                  Interno
+                  EAN-13 interno
                 </span>
               )}
             </label>
@@ -441,12 +434,12 @@ export default function NuevoProductoPage() {
               name="codigo_barras"
               value={form.codigo_barras}
               onChange={handleChange}
-              placeholder="Escaneá el código real o generá uno interno"
+              placeholder="Escaneá el código del producto o generá uno interno"
               className={inputClass}
               autoComplete="off"
             />
             <p className="mt-1 text-xs text-gray-500">
-              Usá el código real del producto si existe. Si no, generá uno interno para control de inventario.
+              Si el producto trae código de fábrica, escanealo. Si no, generá uno interno para imprimir etiqueta y leer con pistolita.
             </p>
             <div className="mt-2">
               <button
@@ -458,7 +451,7 @@ export default function NuevoProductoPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
                   <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0v2.431l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
                 </svg>
-                {generandoCodigo ? "Generando..." : "Generar código interno"}
+                {generandoCodigo ? "Generando..." : "Generar código de barras interno"}
               </button>
               <span className="ml-2 text-xs text-gray-400">(opcional)</span>
             </div>

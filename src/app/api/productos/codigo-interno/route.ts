@@ -4,13 +4,14 @@ import { postgrestRpc, getAccessTokenForRequest } from "@/lib/supabase/postgrest
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
-export const INTERNAL_CODE_PREFIX = "ELE-PER-";
+/** Prefijo de los códigos internos EAN-13 generados por el sistema. */
+export const INTERNAL_EAN13_PREFIX = "20";
 
 /**
  * POST /api/productos/codigo-interno
  *
- * Genera atómicamente un código interno único en formato:
- *     ELE-PER-{SEQ6}   (p. ej. ELE-PER-000001)
+ * Genera atómicamente un código de barras interno EAN-13 numérico (13
+ * dígitos, checksum válido) con prefijo "20…" reservado para uso interno.
  *
  * Transporte: PostgREST HTTPS → RPC elevate.generar_codigo_producto_interno.
  * NO usa pg pool directo: el runtime Hostinger no tiene acceso al puerto 5432.
