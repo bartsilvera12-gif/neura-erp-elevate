@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 import { successResponse, errorResponse } from "@/lib/api/response";
@@ -10,7 +11,6 @@ import {
   buildProductoImagenPath,
   pathBelongsToEmpresa,
   publicProductoImagenUrl,
-  signProductoImagen,
 } from "@/lib/inventario/imagen-storage";
 import {
   getProductoPostgrest,
@@ -18,16 +18,39 @@ import {
 } from "@/lib/inventario/server/productos-postgrest";
 
 /**
- * Imagen de producto (bucket privado `productos-imagenes`).
+ * Imagen de producto (bucket público `productos-imagenes`).
  *
- * Productos: PostgREST HTTPS con JWT del usuario (RLS por empresa). El
- * runtime Hostinger NO puede usar pg.Pool (puerto 5432 firewalled).
- * Storage: SDK Supabase con service role (necesario para subir a bucket
- * privado y para crear el bucket si no existe).
+ * Productos: PostgREST HTTPS con JWT del usuario (RLS por empresa).
+ * Storage: cliente Supabase armado con el JWT del usuario logueado
+ *   (rol `authenticated` + storage policies sobre el bucket).
+ *
+ * No usamos service_role para Storage porque el runtime Hostinger tiene
+ * una SUPABASE_SERVICE_ROLE_KEY desfasada respecto al JWT_SECRET de
+ * los containers Supabase: cualquier llamada a Storage con esa key
+ * devuelve "signature verification failed". El JWT del usuario sí es
+ * válido (Supabase Auth lo emite con el secret correcto).
+ *
+ * Como el bucket es público, las URLs se construyen directo al
+ * endpoint /storage/v1/object/public/... (cacheable por CDN).
  */
 
 function diagnostic(parts: Array<string | null | undefined>): string {
   return parts.filter(Boolean).join(" · ");
+}
+
+/**
+ * Cliente Supabase autenticado con el JWT del usuario. Storage usa este
+ * cliente para upload/delete; las policies sobre storage.objects para
+ * bucket productos-imagenes habilitan al rol `authenticated`.
+ */
+function storageClientWithJwt(jwt: string | null) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!url || !anonKey) throw new Error("Falta NEXT_PUBLIC_SUPABASE_URL/ANON_KEY");
+  return createClient(url, anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+    global: jwt ? { headers: { Authorization: `Bearer ${jwt}` } } : undefined,
+  });
 }
 
 export async function GET(
@@ -40,19 +63,17 @@ export async function GET(
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
-    const { supabase, auth } = ctx;
-    const empresaId = auth.empresa_id;
+    const empresaId = ctx.auth.empresa_id;
     const jwt = await getAccessTokenForRequest(request);
 
     const prod = await getProductoPostgrest(jwt, empresaId, productoId);
     if (!prod) {
       return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
     }
-    const signed = prod.imagen_path
-      ? await signProductoImagen(supabase, prod.imagen_path, 3600)
-      : null;
+    // Bucket público: devolvemos URL pública estable (no signed).
+    const publicUrl = publicProductoImagenUrl(prod.imagen_path);
     return NextResponse.json(
-      successResponse({ imagen_path: prod.imagen_path, imagen_url: signed })
+      successResponse({ imagen_path: prod.imagen_path, imagen_url: publicUrl ?? prod.imagen_url })
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -74,8 +95,7 @@ export async function POST(
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
-    const { supabase, auth } = ctx;
-    const empresaId = auth.empresa_id;
+    const empresaId = ctx.auth.empresa_id;
     const jwt = await getAccessTokenForRequest(request);
 
     // 1) Ownership via PostgREST (RLS por empresa).
@@ -114,25 +134,36 @@ export async function POST(
       );
     }
 
-    // 3) El bucket productos-imagenes es infraestructura permanente
-    //    (creado a mano en la VPS, public=true). NO llamar a getBucket/
-    //    createBucket en cada upload: en runtime Hostinger esa llamada
-    //    devolvía "signature verification failed" y bloqueaba todas las
-    //    subidas. Saltarse el ensure es seguro porque el bucket existe.
+    // 3) Cliente Storage con JWT del usuario (NO service_role)
+    let storageSupabase;
+    try {
+      storageSupabase = storageClientWithJwt(jwt);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[/api/productos/[id]/imagen POST] client", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo subir la imagen. (storage_client_init_failed · ${msg.slice(0, 120)})`),
+        { status: 500 }
+      );
+    }
 
-    // 4) Borrar imagen anterior si pertenece a la empresa
+    // 4) Borrar imagen anterior si pertenece a la empresa (best-effort)
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
-      await supabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
+      await storageSupabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
     }
 
     // 5) Upload nuevo
     const path = buildProductoImagenPath(empresaId, productoId, file.type);
     const buf = Buffer.from(await file.arrayBuffer());
-    const up = await supabase.storage
+    const up = await storageSupabase.storage
       .from(PRODUCTOS_IMAGENES_BUCKET)
       .upload(path, buf, { contentType: file.type, upsert: true });
     if (up.error) {
-      console.error("[/api/productos/[id]/imagen POST] upload", { empresaId, productoId, message: up.error.message });
+      console.error("[/api/productos/[id]/imagen POST] upload", {
+        empresaId,
+        productoId,
+        message: up.error.message,
+      });
       return NextResponse.json(
         errorResponse(`No se pudo subir la imagen. (storage_upload_failed · ${up.error.message.slice(0, 120)})`),
         { status: 502 }
@@ -140,8 +171,6 @@ export async function POST(
     }
 
     // 6) Persistir imagen_path + URL pública (bucket público) via PostgREST.
-    //    Guardar el URL en la propia columna evita depender de un grant
-    //    SELECT(imagen_path) extra para el rol anon del catálogo público.
     const publicUrl = publicProductoImagenUrl(path);
     let updated;
     try {
@@ -164,9 +193,9 @@ export async function POST(
       );
     }
 
-    // 7) Signed URL para preview
-    const signed = await signProductoImagen(supabase, path, 3600);
-    return NextResponse.json(successResponse({ imagen_path: path, imagen_url: signed }));
+    return NextResponse.json(
+      successResponse({ imagen_path: path, imagen_url: publicUrl })
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[/api/productos/[id]/imagen POST] outer", msg);
@@ -187,8 +216,7 @@ export async function DELETE(
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
-    const { supabase, auth } = ctx;
-    const empresaId = auth.empresa_id;
+    const empresaId = ctx.auth.empresa_id;
     const jwt = await getAccessTokenForRequest(request);
 
     const prod = await getProductoPostgrest(jwt, empresaId, productoId);
@@ -197,7 +225,8 @@ export async function DELETE(
     }
 
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
-      await supabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
+      const storageSupabase = storageClientWithJwt(jwt);
+      await storageSupabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
     }
 
     await updateProductoPostgrest(jwt, empresaId, productoId, {
