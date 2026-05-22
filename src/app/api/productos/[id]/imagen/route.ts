@@ -8,7 +8,6 @@ import {
   MAX_IMAGE_BYTES,
   PRODUCTOS_IMAGENES_BUCKET,
   buildProductoImagenPath,
-  ensureProductosImagenesBucket,
   pathBelongsToEmpresa,
   publicProductoImagenUrl,
   signProductoImagen,
@@ -115,17 +114,11 @@ export async function POST(
       );
     }
 
-    // 3) Bucket idempotente (no-op si ya existe)
-    try {
-      await ensureProductosImagenesBucket(supabase);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error("[/api/productos/[id]/imagen POST] bucket", msg);
-      return NextResponse.json(
-        errorResponse(`No se pudo subir la imagen. (storage_bucket_setup_failed · ${msg.slice(0, 120)})`),
-        { status: 502 }
-      );
-    }
+    // 3) El bucket productos-imagenes es infraestructura permanente
+    //    (creado a mano en la VPS, public=true). NO llamar a getBucket/
+    //    createBucket en cada upload: en runtime Hostinger esa llamada
+    //    devolvía "signature verification failed" y bloqueaba todas las
+    //    subidas. Saltarse el ensure es seguro porque el bucket existe.
 
     // 4) Borrar imagen anterior si pertenece a la empresa
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
