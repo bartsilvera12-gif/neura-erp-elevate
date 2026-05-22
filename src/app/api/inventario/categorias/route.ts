@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import {
-  insertCategoriaProducto,
-} from "@/lib/inventario/server/catalogos-pg";
+import { insertCategoriaProductoPostgrest } from "@/lib/inventario/server/catalogos-postgrest";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
-const CATEGORIAS_COLS = "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at";
+const CATEGORIAS_COLS =
+  "id,empresa_id,nombre,codigo,descripcion,parent_id,activo,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,12 +44,12 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
+    const jwt = await getAccessTokenForRequest(request);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const nombre = normalizeUpperText(body.nombre);
     if (!nombre) return NextResponse.json(errorResponse("El nombre es obligatorio."), { status: 400 });
     try {
-      const row = await insertCategoriaProducto(schema, ctx.auth.empresa_id, {
+      const row = await insertCategoriaProductoPostgrest(jwt, ctx.auth.empresa_id, {
         nombre,
         codigo: normalizeUpperNullable(body.codigo),
         descripcion: normalizeUpperNullable(body.descripcion),
@@ -61,14 +59,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(successResponse({ categoria: row }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
-      if (/uq_categorias_productos_empresa_nombre|duplicate/i.test(msg)) {
+      const code = (e as { pgCode?: string })?.pgCode;
+      if (code === "23505" || /uq_categorias_productos_empresa_nombre|duplicate/i.test(msg)) {
         return NextResponse.json(
           errorResponse("Ya existe una categoría con ese nombre."),
           { status: 409 }
         );
       }
-      console.error("[/api/inventario/categorias POST]", { schema, msg });
-      return NextResponse.json(errorResponse("No se pudo crear la categoría."), { status: 500 });
+      console.error("[/api/inventario/categorias POST]", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo crear la categoría. (${msg.slice(0, 140)})`),
+        { status: 502 }
+      );
     }
   } catch (err) {
     console.error("[/api/inventario/categorias POST] outer", err);

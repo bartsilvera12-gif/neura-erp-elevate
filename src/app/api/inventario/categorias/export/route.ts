@@ -1,17 +1,17 @@
 import { NextRequest } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
-import { listCategoriasProducto } from "@/lib/inventario/server/catalogos-pg";
+import { listCategoriasProductoPostgrest } from "@/lib/inventario/server/catalogos-postgrest";
+import { getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 import { buildXlsxBuffer, xlsxResponseHeaders, nowStamp } from "@/lib/excel/export";
 
 export async function GET(request: NextRequest) {
   const ctx = await getTenantSupabaseFromAuth(request);
   if (!ctx) return new Response("Unauthorized", { status: 401 });
   const empresaId = ctx.auth.empresa_id;
-  const schema = await fetchDataSchemaForEmpresaId(empresaId);
+  const jwt = await getAccessTokenForRequest(request);
 
   try {
-    const rows = await listCategoriasProducto(schema, empresaId, { soloActivas: false });
+    const rows = await listCategoriasProductoPostgrest(jwt, empresaId, { soloActivas: false });
     const byId = new Map(rows.map((r) => [r.id, r.nombre]));
     const buf = buildXlsxBuffer(rows, [
       { header: "NOMBRE", value: (r) => r.nombre, width: 28 },

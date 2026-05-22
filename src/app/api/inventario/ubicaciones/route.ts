@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
-import { insertUbicacion } from "@/lib/inventario/server/catalogos-pg";
+import { insertUbicacionPostgrest } from "@/lib/inventario/server/catalogos-postgrest";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
 import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 
-const UBICACIONES_COLS = "id,empresa_id,nombre,codigo,tipo,parent_id,descripcion,activo,created_at,updated_at";
+const UBICACIONES_COLS =
+  "id,empresa_id,nombre,codigo,tipo,parent_id,descripcion,activo,created_at,updated_at";
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,12 +44,12 @@ export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
-    const schema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
+    const jwt = await getAccessTokenForRequest(request);
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const nombre = normalizeUpperText(body.nombre);
     if (!nombre) return NextResponse.json(errorResponse("El nombre es obligatorio."), { status: 400 });
     try {
-      const row = await insertUbicacion(schema, ctx.auth.empresa_id, {
+      const row = await insertUbicacionPostgrest(jwt, ctx.auth.empresa_id, {
         nombre,
         codigo: normalizeUpperNullable(body.codigo),
         tipo: body.tipo == null ? "deposito" : String(body.tipo),
@@ -60,14 +60,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(successResponse({ ubicacion: row }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "";
-      if (/uq_ubicaciones_empresa_codigo|duplicate/i.test(msg)) {
+      const code = (e as { pgCode?: string })?.pgCode;
+      if (code === "23505" || /uq_ubicaciones_empresa_codigo|duplicate/i.test(msg)) {
         return NextResponse.json(
           errorResponse("Ya existe una ubicación con ese código."),
           { status: 409 }
         );
       }
-      console.error("[/api/inventario/ubicaciones POST]", { schema, msg });
-      return NextResponse.json(errorResponse("No se pudo crear la ubicación."), { status: 500 });
+      console.error("[/api/inventario/ubicaciones POST]", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo crear la ubicación. (${msg.slice(0, 140)})`),
+        { status: 502 }
+      );
     }
   } catch (err) {
     console.error("[/api/inventario/ubicaciones POST] outer", err);
