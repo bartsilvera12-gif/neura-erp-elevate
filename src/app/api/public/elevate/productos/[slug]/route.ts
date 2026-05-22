@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { elevatePublicCorsHeaders, PUBLIC_CATALOG_CACHE } from "@/lib/public-api/cors";
 import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
+import { publicProductoImagenUrl } from "@/lib/inventario/imagen-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const PUBLIC_DETAIL_SELECT =
   "oferta_hasta," +
   "nuevo_hasta," +
   "imagen_url," +
+  "imagen_path," +
   "descripcion_corta," +
   "descripcion_web," +
   "destacado:destacado_web," +
@@ -53,6 +55,7 @@ type ProductoDetalleRaw = {
   oferta_hasta: string | null;
   nuevo_hasta: string | null;
   imagen_url: string | null;
+  imagen_path: string | null;
   descripcion_corta: string | null;
   descripcion_web: string | null;
   destacado: boolean | null;
@@ -126,7 +129,7 @@ function toDetalle(r: ProductoDetalleRaw) {
     precio_anterior,
     precio_oferta: ofertaActiva ? r.precio_oferta : null,
     oferta_hasta: ofertaActiva ? r.oferta_hasta : null,
-    imagen_url: r.imagen_url,
+    imagen_url: r.imagen_url ?? publicProductoImagenUrl(r.imagen_path),
     descripcion_corta: r.descripcion_corta,
     descripcion_web: r.descripcion_web,
     destacado: r.destacado === true,

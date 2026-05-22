@@ -11,6 +11,24 @@ import type { AppSupabaseClient } from "@/lib/supabase/schema";
 
 export const PRODUCTOS_IMAGENES_BUCKET = "productos-imagenes";
 
+/**
+ * URL pública directa al objeto del bucket. Requiere que el bucket esté
+ * marcado como `public=true` en `storage.buckets`. Se usa en endpoints
+ * públicos (catálogo web) donde NO queremos firmar en cada request
+ * (rompería el cache del CDN).
+ *
+ * Devuelve null si falta config o si imagen_path está vacío.
+ */
+export function publicProductoImagenUrl(imagenPath: string | null | undefined): string | null {
+  if (!imagenPath) return null;
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim();
+  if (!base) return null;
+  const clean = base.replace(/\/$/, "");
+  // Path safe: imagen_path = "{empresa_id}/{producto_id}/principal.{ext}"
+  const encoded = imagenPath.split("/").map(encodeURIComponent).join("/");
+  return `${clean}/storage/v1/object/public/${PRODUCTOS_IMAGENES_BUCKET}/${encoded}`;
+}
+
 export const ALLOWED_IMAGE_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
 export const ALLOWED_IMAGE_EXT: Record<string, string> = {
   "image/jpeg": "jpg",
