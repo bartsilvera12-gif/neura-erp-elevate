@@ -141,6 +141,18 @@ export type CatalogFetchResult = {
   source: "api" | "mock";
 };
 
+/**
+ * Timeout corto para self-fetch durante build/SSR. Sin timeout, si el Node
+ * está bajo carga, la página espera 60s+ a sí misma y arrastra al server.
+ */
+const FETCH_TIMEOUT_MS = 5000;
+
+function fetchWithTimeout(url: string, init: RequestInit, ms = FETCH_TIMEOUT_MS): Promise<Response> {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), ms);
+  return fetch(url, { ...init, signal: ac.signal }).finally(() => clearTimeout(t));
+}
+
 /** Listado completo del catálogo público. API primaria, mock fallback. */
 export async function fetchCatalog(params?: {
   destacado?: boolean;
@@ -154,7 +166,7 @@ export async function fetchCatalog(params?: {
     if (params?.destacado) qs.set("destacado", "true");
     if (params?.nuevos) qs.set("nuevos", "true");
     if (params?.promos) qs.set("promos", "true");
-    const r = await fetch(`${origin}/api/public/elevate/productos?${qs.toString()}`, {
+    const r = await fetchWithTimeout(`${origin}/api/public/elevate/productos?${qs.toString()}`, {
       next: { revalidate: 60 },
     });
     if (!r.ok) return { products: applyFallback(params), source: "mock" };
@@ -173,7 +185,7 @@ export async function fetchProductoDetalle(
 ): Promise<{ product: Product; source: "api" | "mock" } | null> {
   try {
     const origin = await getOrigin();
-    const r = await fetch(`${origin}/api/public/elevate/productos/${encodeURIComponent(slug)}`, {
+    const r = await fetchWithTimeout(`${origin}/api/public/elevate/productos/${encodeURIComponent(slug)}`, {
       next: { revalidate: 60 },
     });
     if (r.status === 404) {

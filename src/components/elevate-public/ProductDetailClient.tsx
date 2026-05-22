@@ -55,6 +55,9 @@ export function ProductDetailClient({ product }: { product: Product }) {
                   sizes="(min-width:1024px) 50vw, 100vw"
                   priority
                   className="object-cover"
+                  // unoptimized: imagen pública del bucket Storage. Evita
+                  // /_next/image y libera CPU del Node de Hostinger.
+                  unoptimized
                 />
               </div>
               {product.promo && (

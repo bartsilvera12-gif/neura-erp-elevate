@@ -92,11 +92,21 @@ export async function middleware(request: NextRequest) {
 }
 
 /**
- * Excluir `/api/webhooks/*`: Meta hace GET sin cookies para verificar el webhook;
- * no debe pasar por refresh de sesión Supabase.
+ * Matcher: excluye TODO lo que no requiere lógica de middleware.
+ * Sin esto, cada request a un asset/imagen/font/etc. ejecuta el middleware,
+ * carga ssr, lee request data y marca todas las rutas como dynamic.
+ *
+ * Excluidos:
+ *   - /api/webhooks/*       (Meta sin cookies)
+ *   - /api/public/elevate/* (catálogo público, sin sesión)
+ *   - /_next/static/*
+ *   - /_next/image
+ *   - /_next/data/*
+ *   - favicon, robots, sitemap, manifest
+ *   - cualquier archivo con extensión (.svg/.png/.jpg/.css/.js/.woff/etc.)
  */
 export const config = {
   matcher: [
-    "/((?!api/webhooks|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api/webhooks|api/public/elevate|_next/static|_next/image|_next/data|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.json|.*\\.[a-zA-Z0-9]+$).*)",
   ],
 };

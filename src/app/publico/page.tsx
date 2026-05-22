@@ -12,11 +12,12 @@ export const metadata = {
     "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales. Asesoramiento exclusivo y envíos a todo el país.",
 };
 
-// Cache de 60s: la home pública re-renderiza cada minuto en background.
-// Antes era `force-dynamic` y cada visita disparaba SSR (~7s) sobre el
-// mismo Node que sirve el ERP. Con revalidate la home queda cacheable y
-// el catálogo se actualiza máximo 60s después de editar un producto.
-export const revalidate = 60;
+// Dinámico explícito: el self-fetch al API pública desde el mismo Node
+// causaba colgar el prerender durante `next build` cuando el ERP estaba
+// bajo carga. La performance se gana ahora con `unoptimized` en las
+// imágenes (eliminamos /_next/image del catálogo) y con middleware
+// matcher restrictivo, no con ISR.
+export const dynamic = "force-dynamic";
 
 /**
  * Home pública Elevate — server component.

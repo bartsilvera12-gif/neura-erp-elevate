@@ -4,10 +4,8 @@ import {
 } from "@/components/elevate-public/ProductDetailClient";
 import { fetchProductoDetalle } from "@/lib/elevate-public/catalog-fetch";
 
-// Cache por-slug de 60s. Cada detalle de producto se cachea independiente y
-// se rebuilda en background al minuto. Trade-off: los cambios en el ERP se
-// reflejan en la web hasta 60s después.
-export const revalidate = 60;
+// Dinámico explícito (ver nota en /publico/page.tsx).
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,

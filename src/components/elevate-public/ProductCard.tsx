@@ -30,6 +30,10 @@ export function ProductCard({ product }: { product: Product }) {
           fill
           sizes="(min-width:1024px) 25vw, (min-width:768px) 33vw, 100vw"
           className="object-cover transition-elegant group-hover:scale-105"
+          // unoptimized: la imagen ya viene del bucket público de Supabase
+          // Storage, lista para servir. Evita /_next/image y libera el CPU
+          // del Node de Hostinger (era el cuello de botella post-deploy).
+          unoptimized
         />
         {product.promo && (
           <span className="absolute top-4 left-4 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
