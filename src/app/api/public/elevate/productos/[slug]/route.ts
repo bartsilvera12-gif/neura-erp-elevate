@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { elevatePublicCorsHeaders, PUBLIC_CATALOG_CACHE } from "@/lib/public-api/cors";
 import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
 
-export const dynamic = "force-dynamic";
+// Sin `force-dynamic`: respeta el Cache-Control público
+// (`public, s-maxage=300, stale-while-revalidate=120`). Filtros activo +
+// visible_web + slug_web previenen exposición de productos privados.
 
 const PUBLIC_DETAIL_SELECT =
   "id," +

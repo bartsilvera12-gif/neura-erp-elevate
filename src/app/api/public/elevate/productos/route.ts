@@ -25,7 +25,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { elevatePublicCorsHeaders, PUBLIC_CATALOG_CACHE } from "@/lib/public-api/cors";
 import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
 
-export const dynamic = "force-dynamic";
+// Sin `force-dynamic`: el endpoint público respeta su Cache-Control
+// (`public, s-maxage=300, stale-while-revalidate=120`) y queda apto para
+// caché del CDN/browser. Los filtros `activo=true AND visible_web=true`
+// más el strip de costo/stock numérico garantizan que el cache nunca
+// expone datos privados.
 
 /**
  * Columnas crudas pedidas a PostgREST. stock_actual + stock_minimo +

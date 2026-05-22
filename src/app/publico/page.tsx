@@ -12,7 +12,11 @@ export const metadata = {
     "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales. Asesoramiento exclusivo y envíos a todo el país.",
 };
 
-export const dynamic = "force-dynamic";
+// Cache de 60s: la home pública re-renderiza cada minuto en background.
+// Antes era `force-dynamic` y cada visita disparaba SSR (~7s) sobre el
+// mismo Node que sirve el ERP. Con revalidate la home queda cacheable y
+// el catálogo se actualiza máximo 60s después de editar un producto.
+export const revalidate = 60;
 
 /**
  * Home pública Elevate — server component.

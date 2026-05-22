@@ -7,7 +7,10 @@ export const metadata = {
     "Explorá nuestra curaduría completa de perfumes nicho, ultranicho, de diseñador y árabes premium.",
 };
 
-export const dynamic = "force-dynamic";
+// Cache de 60s: el listado público de catálogo se rebuilda en background
+// cada minuto. Reduce CPU drásticamente vs `force-dynamic`. Trade-off: los
+// cambios en el ERP se reflejan en la web hasta 60s después.
+export const revalidate = 60;
 
 /**
  * Catálogo público — server component.

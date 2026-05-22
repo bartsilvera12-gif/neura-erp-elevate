@@ -11,7 +11,6 @@
  *   - API es la fuente primaria.
  *   - Si la API devuelve [] o falla, fallback al mock visual.
  */
-import { headers } from "next/headers";
 import {
   products as mockProducts,
   type Product,
@@ -130,14 +129,10 @@ function resolveOriginEnv(): string {
 }
 
 async function getOrigin(): Promise<string> {
-  try {
-    const h = await headers();
-    const host = h.get("host");
-    const proto = h.get("x-forwarded-proto") ?? "https";
-    if (host) return `${proto}://${host}`;
-  } catch {
-    /* fuera de contexto de request — caer a env */
-  }
+  // Antes leía `headers()` para inferir el host actual. Eso opta out del
+  // Data Cache de Next y obliga a SSR por request. La API pública vive en
+  // un host estable (NEXT_PUBLIC_BASE_URL o `https://elevate.neura.com.py`),
+  // así que con el env alcanza y la página queda cacheable por revalidate.
   return resolveOriginEnv();
 }
 
