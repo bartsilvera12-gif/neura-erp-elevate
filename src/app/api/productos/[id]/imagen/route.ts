@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
+import { getAccessTokenForRequest } from "@/lib/supabase/postgrest-runtime";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import {
@@ -12,13 +12,24 @@ import {
   pathBelongsToEmpresa,
   signProductoImagen,
 } from "@/lib/inventario/imagen-storage";
-import { getProductoPg, updateProductoPg } from "@/lib/inventario/server/productos-pg";
+import {
+  getProductoPostgrest,
+  updateProductoPostgrest,
+} from "@/lib/inventario/server/productos-postgrest";
 
 /**
- * GET /api/productos/[id]/imagen — signed URL fresca (TTL 1h).
- * Productos via PG directo (multi-schema), Storage via Supabase Storage
- * (no depende de PostgREST schema).
+ * Imagen de producto (bucket privado `productos-imagenes`).
+ *
+ * Productos: PostgREST HTTPS con JWT del usuario (RLS por empresa). El
+ * runtime Hostinger NO puede usar pg.Pool (puerto 5432 firewalled).
+ * Storage: SDK Supabase con service role (necesario para subir a bucket
+ * privado y para crear el bucket si no existe).
  */
+
+function diagnostic(parts: Array<string | null | undefined>): string {
+  return parts.filter(Boolean).join(" · ");
+}
+
 export async function GET(
   request: NextRequest,
   ctxParams: { params: Promise<{ id: string }> }
@@ -31,9 +42,9 @@ export async function GET(
     }
     const { supabase, auth } = ctx;
     const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
+    const jwt = await getAccessTokenForRequest(request);
 
-    const prod = await getProductoPg(schema, empresaId, productoId);
+    const prod = await getProductoPostgrest(jwt, empresaId, productoId);
     if (!prod) {
       return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
     }
@@ -44,15 +55,15 @@ export async function GET(
       successResponse({ imagen_path: prod.imagen_path, imagen_url: signed })
     );
   } catch (err) {
-    console.error("[/api/productos/[id]/imagen GET]", err instanceof Error ? err.message : err);
-    return NextResponse.json(errorResponse("No se pudo obtener la imagen."), { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/api/productos/[id]/imagen GET]", msg);
+    return NextResponse.json(
+      errorResponse(`No se pudo obtener la imagen. (${msg.slice(0, 160)})`),
+      { status: 500 }
+    );
   }
 }
 
-/**
- * POST: upload (multipart). Sube al bucket privado y persiste imagen_path
- * via PG directo en la tabla productos del tenant.
- */
 export async function POST(
   request: NextRequest,
   ctxParams: { params: Promise<{ id: string }> }
@@ -65,10 +76,20 @@ export async function POST(
     }
     const { supabase, auth } = ctx;
     const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
+    const jwt = await getAccessTokenForRequest(request);
 
-    // 1) Ownership via PG
-    const prod = await getProductoPg(schema, empresaId, productoId);
+    // 1) Ownership via PostgREST (RLS por empresa).
+    let prod;
+    try {
+      prod = await getProductoPostgrest(jwt, empresaId, productoId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[/api/productos/[id]/imagen POST] ownership", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo subir la imagen. (ownership_check_failed · ${msg.slice(0, 120)})`),
+        { status: 502 }
+      );
+    }
     if (!prod) {
       return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
     }
@@ -93,8 +114,17 @@ export async function POST(
       );
     }
 
-    // 3) Bucket idempotente
-    await ensureProductosImagenesBucket(supabase);
+    // 3) Bucket idempotente (no-op si ya existe)
+    try {
+      await ensureProductosImagenesBucket(supabase);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[/api/productos/[id]/imagen POST] bucket", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo subir la imagen. (storage_bucket_setup_failed · ${msg.slice(0, 120)})`),
+        { status: 502 }
+      );
+    }
 
     // 4) Borrar imagen anterior si pertenece a la empresa
     if (prod.imagen_path && pathBelongsToEmpresa(prod.imagen_path, empresaId)) {
@@ -108,26 +138,45 @@ export async function POST(
       .from(PRODUCTOS_IMAGENES_BUCKET)
       .upload(path, buf, { contentType: file.type, upsert: true });
     if (up.error) {
-      console.error("[/api/productos/[id]/imagen POST] upload", { schema, empresaId, productoId, message: up.error.message });
-      return NextResponse.json(errorResponse("No se pudo subir la imagen."), { status: 500 });
+      console.error("[/api/productos/[id]/imagen POST] upload", { empresaId, productoId, message: up.error.message });
+      return NextResponse.json(
+        errorResponse(`No se pudo subir la imagen. (storage_upload_failed · ${up.error.message.slice(0, 120)})`),
+        { status: 502 }
+      );
     }
 
-    // 6) Persistir imagen_path via PG directo
-    const updated = await updateProductoPg(schema, empresaId, productoId, {
-      imagen_path: path,
-      imagen_url: null,
-    });
+    // 6) Persistir imagen_path via PostgREST
+    let updated;
+    try {
+      updated = await updateProductoPostgrest(jwt, empresaId, productoId, {
+        imagen_path: path,
+        imagen_url: null,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[/api/productos/[id]/imagen POST] persist", msg);
+      return NextResponse.json(
+        errorResponse(`No se pudo asociar la imagen al producto. (db_update_failed · ${msg.slice(0, 120)})`),
+        { status: 502 }
+      );
+    }
     if (!updated) {
-      // No deberia ocurrir (ya validamos ownership), pero por las dudas.
-      return NextResponse.json(errorResponse("No se pudo asociar la imagen al producto."), { status: 500 });
+      return NextResponse.json(
+        errorResponse("No se pudo asociar la imagen al producto."),
+        { status: 500 }
+      );
     }
 
     // 7) Signed URL para preview
     const signed = await signProductoImagen(supabase, path, 3600);
     return NextResponse.json(successResponse({ imagen_path: path, imagen_url: signed }));
   } catch (err) {
-    console.error("[/api/productos/[id]/imagen POST] outer", err instanceof Error ? err.message : err);
-    return NextResponse.json(errorResponse("No se pudo subir la imagen."), { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/api/productos/[id]/imagen POST] outer", msg);
+    return NextResponse.json(
+      errorResponse(`No se pudo subir la imagen. (${diagnostic([msg.slice(0, 160)])})`),
+      { status: 500 }
+    );
   }
 }
 
@@ -143,9 +192,9 @@ export async function DELETE(
     }
     const { supabase, auth } = ctx;
     const empresaId = auth.empresa_id;
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
+    const jwt = await getAccessTokenForRequest(request);
 
-    const prod = await getProductoPg(schema, empresaId, productoId);
+    const prod = await getProductoPostgrest(jwt, empresaId, productoId);
     if (!prod) {
       return NextResponse.json(errorResponse(API_ERRORS.NOT_FOUND), { status: 404 });
     }
@@ -154,14 +203,18 @@ export async function DELETE(
       await supabase.storage.from(PRODUCTOS_IMAGENES_BUCKET).remove([prod.imagen_path]);
     }
 
-    await updateProductoPg(schema, empresaId, productoId, {
+    await updateProductoPostgrest(jwt, empresaId, productoId, {
       imagen_path: null,
       imagen_url: null,
     });
 
     return NextResponse.json(successResponse({ imagen_path: null, imagen_url: null }));
   } catch (err) {
-    console.error("[/api/productos/[id]/imagen DELETE]", err instanceof Error ? err.message : err);
-    return NextResponse.json(errorResponse("No se pudo quitar la imagen."), { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/api/productos/[id]/imagen DELETE]", msg);
+    return NextResponse.json(
+      errorResponse(`No se pudo quitar la imagen. (${msg.slice(0, 160)})`),
+      { status: 500 }
+    );
   }
 }
