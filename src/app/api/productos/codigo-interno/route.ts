@@ -1,33 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
-import { createServiceRoleClient } from "@/lib/supabase/service-admin";
-import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
-import { incrementarSecuenciaPg } from "@/lib/inventario/server/productos-pg";
+import { postgrestRpc } from "@/lib/supabase/postgrest-runtime";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 
-export const INTERNAL_CODE_PREFIX = "INT-";
-
-function empresaShort(nombre: string | null | undefined): string {
-  const raw = (nombre ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
-  const alnum = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return alnum.slice(0, 3) || "EMP";
-}
-
-function yyyymm(d = new Date()): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  return `${y}${m}`;
-}
+export const INTERNAL_CODE_PREFIX = "ELE-PER-";
 
 /**
  * POST /api/productos/codigo-interno
  *
- * Genera atomicamente un codigo interno unico por empresa via funcion
- * plpgsql instalada en cada schema tenant (UPSERT con ON CONFLICT DO UPDATE,
- * sin race conditions). Soporta tenants `erp_*` no expuestos en PostgREST.
+ * Genera atómicamente un código interno único en formato:
+ *     ELE-PER-{SEQ6}   (p. ej. ELE-PER-000001)
  *
- * Formato: INT-{EMPRESA_SHORT}-{YYYYMM}-{SEQ6}
+ * Transporte: PostgREST HTTPS → RPC elevate.generar_codigo_producto_interno.
+ * NO usa pg pool directo: el runtime Hostinger no tiene acceso al puerto 5432.
+ * La RPC es SECURITY DEFINER y maneja el UPSERT en
+ * elevate.productos_codigo_secuencia + validación de unicidad.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -37,41 +25,29 @@ export async function POST(request: NextRequest) {
     }
     const empresaId = ctx.auth.empresa_id;
 
-    // Nombre de empresa para prefijo (catalogo zentra_erp.empresas).
-    const catalog = createServiceRoleClient();
-    const { data: emp } = await catalog
-      .from("empresas")
-      .select("nombre_empresa")
-      .eq("id", empresaId)
-      .maybeSingle();
-    const short = empresaShort((emp as { nombre_empresa?: string | null } | null)?.nombre_empresa);
+    const r = await postgrestRpc<string>(
+      "generar_codigo_producto_interno",
+      { p_empresa_id: empresaId },
+      { role: "service_role" }
+    );
 
-    const schema = await fetchDataSchemaForEmpresaId(empresaId);
-
-    let nextValue: number;
-    try {
-      nextValue = await incrementarSecuenciaPg(schema, empresaId);
-    } catch (err) {
-      console.error("[/api/productos/codigo-interno]", {
-        schema,
-        empresaId,
-        message: err instanceof Error ? err.message : String(err),
-      });
+    if (!r.ok) {
+      console.error("[/api/productos/codigo-interno]", r.error);
       return NextResponse.json(
         errorResponse("No se pudo generar el código interno. Intentá nuevamente."),
-        { status: 500 }
+        { status: 502 }
       );
     }
 
-    if (!Number.isFinite(nextValue) || nextValue <= 0) {
+    // PostgREST devuelve la scalar text como string en rows[0] o como array.
+    const raw = r.rows[0];
+    const codigo = typeof raw === "string" ? raw.trim() : "";
+    if (!codigo) {
       return NextResponse.json(
-        errorResponse("No se pudo generar la secuencia."),
-        { status: 500 }
+        errorResponse("La RPC devolvió un valor vacío."),
+        { status: 502 }
       );
     }
-
-    const seq6 = String(nextValue).padStart(6, "0");
-    const codigo = `${INTERNAL_CODE_PREFIX}${short}-${yyyymm()}-${seq6}`;
 
     return NextResponse.json(successResponse({ codigo, interno: true }));
   } catch (err) {

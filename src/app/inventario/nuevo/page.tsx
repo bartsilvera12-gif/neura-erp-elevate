@@ -14,6 +14,7 @@ import {
   type CatalogoWebState,
 } from "@/components/inventario/CatalogoWebFields";
 import { slugifyNombre } from "@/lib/inventario/slug";
+import { UNIDADES_MEDIDA, DEFAULT_UNIDAD_MEDIDA } from "@/lib/inventario/unidades-medida";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -33,7 +34,7 @@ export default function NuevoProductoPage() {
     precio_venta: "",
     stock_actual: "",
     stock_minimo: "",
-    unidad_medida: "",
+    unidad_medida: DEFAULT_UNIDAD_MEDIDA as string,
     metodo_valuacion: "CPP" as MetodoValuacion,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -166,10 +167,11 @@ export default function NuevoProductoPage() {
     setErrorGeneral(null);
 
     const codigoEnInput = form.codigo_barras.trim();
-    // Solo rechazar prefijo INT- si fue ESCRITO MANUALMENTE (no si vino del botón).
-    const esIntManual = !!codigoEnInput && /^INT-/i.test(codigoEnInput) && !codigoGeneradoInterno;
-    if (esIntManual) {
-      setErrorGeneral('El prefijo "INT-" está reservado para códigos internos generados por el sistema. Dejá el campo vacío y guardá, o usá el botón "Generar código interno".');
+    // Solo rechazar prefijo reservado si fue ESCRITO MANUALMENTE (no si vino del botón).
+    const esInternoManual =
+      !!codigoEnInput && /^ELE-PER-/i.test(codigoEnInput) && !codigoGeneradoInterno;
+    if (esInternoManual) {
+      setErrorGeneral('El prefijo "ELE-PER-" está reservado para códigos internos generados por el sistema. Dejá el campo vacío y guardá, o usá el botón "Generar código interno".');
       return;
     }
 
@@ -410,22 +412,24 @@ export default function NuevoProductoPage() {
 
             <div>
               <label className={labelClass}>Unidad de medida</label>
-              <input
-                type="text"
+              <select
                 name="unidad_medida"
                 value={form.unidad_medida}
                 onChange={handleChange}
-                placeholder="Ej: UNIDAD, KG, LT"
-                className={`${inputClass} uppercase`}
+                className={inputClass}
                 required
-              />
+              >
+                {UNIDADES_MEDIDA.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {/* Código de barras */}
+          {/* Código de barras / código interno */}
           <div>
             <label className={labelClass}>
-              Código de barras
+              Código de barras / código interno
               {codigoGeneradoInterno && form.codigo_barras && (
                 <span className="ml-2 align-middle text-[10px] uppercase tracking-wider bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded">
                   Interno
@@ -437,10 +441,13 @@ export default function NuevoProductoPage() {
               name="codigo_barras"
               value={form.codigo_barras}
               onChange={handleChange}
-              placeholder="Escaneá o escribí — dejá vacío para autogenerar"
+              placeholder="Escaneá el código real o generá uno interno"
               className={inputClass}
               autoComplete="off"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Usá el código real del producto si existe. Si no, generá uno interno para control de inventario.
+            </p>
             <div className="mt-2">
               <button
                 type="button"
