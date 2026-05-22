@@ -1,6 +1,7 @@
 "use client";
 
 import { slugifyNombre } from "@/lib/inventario/slug";
+import { CONCENTRACIONES, isConcentracionCanonica } from "@/lib/inventario/concentraciones";
 
 /**
  * Sección "Catálogo web" del formulario de productos del ERP.
@@ -229,13 +230,23 @@ export function CatalogoWebFields({ value, onChange, nombre, precioVenta }: Prop
         </div>
         <div>
           <label className={labelClass}>Concentración</label>
-          <input
-            type="text"
+          <select
             value={value.concentracion}
             onChange={(e) => set("concentracion", e.target.value)}
-            placeholder="Eau de Parfum"
             className={inputClass}
-          />
+          >
+            <option value="">Seleccionar concentración</option>
+            {/* Producto legacy con valor fuera de catálogo: opción "Actual: …" */}
+            {value.concentracion &&
+              !isConcentracionCanonica(value.concentracion) && (
+                <option value={value.concentracion}>
+                  Actual: {value.concentracion}
+                </option>
+              )}
+            {CONCENTRACIONES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className={labelClass}>Volumen (ml)</label>
