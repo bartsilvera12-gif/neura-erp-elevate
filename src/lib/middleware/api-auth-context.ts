@@ -5,6 +5,7 @@ import type { User } from "@supabase/supabase-js";
 import { usuarioEmailLookupVariants } from "@/lib/auth/usuario-email-variants";
 import { supabaseDbSchemaOption, type AppSupabaseClient } from "@/lib/supabase/schema";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
 
 export type ApiAuthFailureCode =
   | "missing_public_env"
@@ -75,9 +76,14 @@ export async function resolveApiAuthContext(
   request?: Request | null,
   opts?: ResolveApiAuthOptions
 ): Promise<ApiAuthResult> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  let url: string;
+  try {
+    url = getSupabaseServerUrl();
+  } catch {
+    return { ok: false, code: "missing_public_env" };
+  }
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !anonKey) {
+  if (!anonKey) {
     return { ok: false, code: "missing_public_env" };
   }
 

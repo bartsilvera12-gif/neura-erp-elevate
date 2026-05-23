@@ -1,15 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { supabaseDbSchemaOption } from "@/lib/supabase/schema";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
 
 /**
  * Cliente Supabase con sesión del usuario (cookies). Usar en Server Components / Route Handlers.
  */
 export async function createSupabaseServerClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getSupabaseServerUrl();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY no definidas");
+  if (!anonKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY no definida");
   }
 
   const cookieStore = await cookies();
@@ -37,10 +38,10 @@ export async function createSupabaseServerClient() {
  * Misma sesión que `createSupabaseServerClient`, pero PostgREST apunta a otro esquema (datos omnicanal por empresa).
  */
 export async function createSupabaseServerClientWithDbSchema(schema: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getSupabaseServerUrl();
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY no definidas");
+  if (!anonKey) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY no definida");
   }
 
   const cookieStore = await cookies();

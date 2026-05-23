@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
 
 export function extractBearerTokenFromRequest(request: Request): string | null {
   const h = request.headers.get("authorization");
@@ -12,12 +13,17 @@ export function extractBearerTokenFromRequest(request: Request): string | null {
 
 /**
  * Usuario de Auth para Route Handlers: JWT en header o cookies.
- * Solo NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (sin db.schema en getUser).
+ * Usa SUPABASE_INTERNAL_URL server-side cuando está definida (co-host VPS).
  */
 export async function getAuthUserForApiRoute(request: Request): Promise<User | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  let url: string;
+  try {
+    url = getSupabaseServerUrl();
+  } catch {
+    return null;
+  }
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !anonKey) return null;
+  if (!anonKey) return null;
 
   const bearer = extractBearerTokenFromRequest(request);
   if (bearer) {

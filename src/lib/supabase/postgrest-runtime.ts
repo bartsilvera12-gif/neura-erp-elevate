@@ -17,6 +17,7 @@
  *     NUNCA expuesto al cliente.
  */
 import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
 
 export type PostgrestRole = "anon" | "jwt" | "service_role";
 
@@ -32,10 +33,12 @@ export type PostgrestOk<T> = { ok: true; rows: T[]; status: number };
 export type PostgrestFail = { ok: false; error: PostgrestErr };
 export type PostgrestRes<T> = PostgrestOk<T> | PostgrestFail;
 
+/**
+ * URL del PostgREST server-side. Usa SUPABASE_INTERNAL_URL si está definida
+ * (co-host VPS, loopback Kong); sino, NEXT_PUBLIC_SUPABASE_URL.
+ */
 function publicUrl(): string {
-  const u = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  if (!u) throw new Error("Falta NEXT_PUBLIC_SUPABASE_URL");
-  return u;
+  return getSupabaseServerUrl();
 }
 
 function anonKey(): string {

@@ -1,12 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServiceRoleClientOptions, type AppSupabaseClient } from "@/lib/supabase/schema";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
 
-/** Cliente service role (servidor): webhooks, /r redirect, jobs. */
+/** Cliente service role (servidor): webhooks, /r redirect, jobs.
+ *  Usa `SUPABASE_INTERNAL_URL` si está definida (co-host VPS); sino, `NEXT_PUBLIC_SUPABASE_URL`. */
 export function createServiceRoleClient(): AppSupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const url = getSupabaseServerUrl();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!url || !key) {
-    throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY");
+  if (!key) {
+    throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY");
   }
   return createClient(url, key, { ...supabaseServiceRoleClientOptions }) as AppSupabaseClient;
 }
