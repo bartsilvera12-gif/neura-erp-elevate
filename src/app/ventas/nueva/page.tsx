@@ -85,6 +85,10 @@ export default function NuevaVentaPage() {
   const [items, setItems]           = useState<LineaVenta[]>([]);
   const [errorLinea, setErrorLinea] = useState<string | null>(null);
   const [errorVenta, setErrorVenta] = useState<string | null>(null);
+  /** Bloquea doble click en "Confirmar venta" mientras el POST a /api/ventas/create
+   *  está en vuelo. El backend tiene transacción + lock FOR UPDATE pero NO usa
+   *  client_request_id idempotente — la mejor defensa es no permitir 2 submits. */
+  const [submitting, setSubmitting] = useState(false);
 
   // ── Condiciones de la venta ────────────────────────────────────────────────
   const [moneda,     setMoneda]     = useState<MonedaVenta>("GS");
@@ -355,24 +359,30 @@ export default function NuevaVentaPage() {
     e.preventDefault();
     setErrorVenta(null);
     if (!ventaValida) return;
+    if (submitting) return; // guard contra doble click / Enter rápido
 
-    const resultado = await saveVenta({
-      items,
-      moneda,
-      tipo_cambio:  tipoCambioNum,
-      subtotal:     totalSubtotal,
-      monto_iva:    totalIva,
-      total:        totalGeneral,
-      tipo_venta:   tipoVenta,
-      plazo_dias:
-        tipoVenta === "CREDITO" && plazoDias ? parseInt(plazoDias) : undefined,
-    });
+    setSubmitting(true);
+    try {
+      const resultado = await saveVenta({
+        items,
+        moneda,
+        tipo_cambio:  tipoCambioNum,
+        subtotal:     totalSubtotal,
+        monto_iva:    totalIva,
+        total:        totalGeneral,
+        tipo_venta:   tipoVenta,
+        plazo_dias:
+          tipoVenta === "CREDITO" && plazoDias ? parseInt(plazoDias) : undefined,
+      });
 
-    if (!resultado.success) {
-      setErrorVenta(resultado.error);
-      return;
+      if (!resultado.success) {
+        setErrorVenta(resultado.error);
+        return;
+      }
+      router.push("/ventas");
+    } finally {
+      setSubmitting(false);
     }
-    router.push("/ventas");
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -807,10 +817,10 @@ export default function NuevaVentaPage() {
           <div className="mt-6 flex gap-4">
             <button
               type="submit"
-              disabled={!ventaValida}
+              disabled={!ventaValida || submitting}
               className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-6 py-3 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
             >
-              Confirmar venta
+              {submitting ? "Guardando..." : "Confirmar venta"}
             </button>
             <button
               type="button"
