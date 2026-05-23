@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 type Modo = "sin_factura_fiscal" | "sifen" | "autoimpresor";
 type Impresion = "pdf_a4" | "pdf_media_hoja" | "ticket_80mm" | "ticket_58mm";
@@ -66,8 +67,8 @@ export default function FacturacionModoSection() {
     setErrModo(null); setErrAuto(null);
     try {
       const [m, a] = await Promise.all([
-        fetch("/api/configuracion/facturacion-modo", { credentials: "include", cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/configuracion/autoimpresor", { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+        fetchWithSupabaseSession("/api/configuracion/facturacion-modo", { cache: "no-store" }).then((r) => r.json()),
+        fetchWithSupabaseSession("/api/configuracion/autoimpresor", { cache: "no-store" }).then((r) => r.json()),
       ]);
       if (m?.success) setModo(m.data.facturacion_modo as FacturacionModo);
       else setErrModo(m?.error ?? "Error al cargar modo");
@@ -84,8 +85,8 @@ export default function FacturacionModoSection() {
     if (!modo) return;
     setSavingModo(true); setErrModo(null); setOkModo(null);
     try {
-      const r = await fetch("/api/configuracion/facturacion-modo", {
-        method: "PATCH", credentials: "include",
+      const r = await fetchWithSupabaseSession("/api/configuracion/facturacion-modo", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });
@@ -102,8 +103,8 @@ export default function FacturacionModoSection() {
     if (!auto) return;
     setSavingAuto(true); setErrAuto(null); setOkAuto(null);
     try {
-      const r = await fetch("/api/configuracion/autoimpresor", {
-        method: "PATCH", credentials: "include",
+      const r = await fetchWithSupabaseSession("/api/configuracion/autoimpresor", {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       });

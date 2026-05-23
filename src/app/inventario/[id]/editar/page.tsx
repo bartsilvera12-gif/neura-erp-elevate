@@ -15,6 +15,7 @@ import {
   emptyCatalogoWeb,
   type CatalogoWebState,
 } from "@/components/inventario/CatalogoWebFields";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -105,9 +106,8 @@ export default function EditarProductoPage() {
     setErrorDuplicado(null);
     setErrorGeneral(null);
     try {
-      const res = await fetch("/api/productos/codigo-interno", {
+      const res = await fetchWithSupabaseSession("/api/productos/codigo-interno", {
         method: "POST",
-        credentials: "include",
       });
       const json = await res.json();
       if (res.ok && json?.success && json.data?.codigo) {
@@ -181,8 +181,7 @@ export default function EditarProductoPage() {
       });
 
       // Hidratar familia + notas
-      fetch(`/api/productos/${encodeURIComponent(id)}/catalogo-extras`, {
-        credentials: "include",
+      fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}/catalogo-extras`, {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : null))
@@ -338,11 +337,10 @@ export default function EditarProductoPage() {
           }
           if (Object.keys(extrasBody).length > 0) {
             try {
-              await fetch(`/api/productos/${encodeURIComponent(id)}`, {
+              await fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(extrasBody),
-                credentials: "include",
               });
             } catch (e) {
               console.warn("[editar producto] catálogo extras fallaron", e);

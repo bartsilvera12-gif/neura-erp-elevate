@@ -15,6 +15,7 @@ import {
 } from "@/components/inventario/CatalogoWebFields";
 import { slugifyNombre } from "@/lib/inventario/slug";
 import { UNIDADES_MEDIDA, DEFAULT_UNIDAD_MEDIDA } from "@/lib/inventario/unidades-medida";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -117,9 +118,8 @@ export default function NuevoProductoPage() {
     setErrorDuplicado(null);
     setErrorGeneral(null);
     try {
-      const res = await fetch("/api/productos/codigo-interno", {
+      const res = await fetchWithSupabaseSession("/api/productos/codigo-interno", {
         method: "POST",
-        credentials: "include",
       });
       const json = await res.json();
       if (res.ok && json?.success && json.data?.codigo) {
@@ -185,9 +185,8 @@ export default function NuevoProductoPage() {
       let interno = codigoGeneradoInterno && !!codigoEnInput;
       if (!codigo) {
         try {
-          const res = await fetch("/api/productos/codigo-interno", {
+          const res = await fetchWithSupabaseSession("/api/productos/codigo-interno", {
             method: "POST",
-            credentials: "include",
           });
           const json = await res.json();
           if (res.ok && json?.success && json.data?.codigo) {
@@ -237,7 +236,7 @@ export default function NuevoProductoPage() {
         // Familia + notas (post-create) — best-effort via PATCH al mismo endpoint
         if (guardado && (cw.familia_olfativa_nombre !== null || cw.notas_top.length || cw.notas_heart.length || cw.notas_base.length)) {
           try {
-            await fetch(`/api/productos/${guardado.id}`, {
+            await fetchWithSupabaseSession(`/api/productos/${guardado.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -246,7 +245,6 @@ export default function NuevoProductoPage() {
                 notas_heart: cw.notas_heart,
                 notas_base: cw.notas_base,
               }),
-              credentials: "include",
             });
           } catch (e) {
             console.warn("[nuevo producto] catálogo extras fallaron", e);
@@ -268,10 +266,9 @@ export default function NuevoProductoPage() {
         try {
           const fd = new FormData();
           fd.append("file", imagenFile);
-          const up = await fetch(`/api/productos/${guardado.id}/imagen`, {
+          const up = await fetchWithSupabaseSession(`/api/productos/${guardado.id}/imagen`, {
             method: "POST",
             body: fd,
-            credentials: "include",
           });
           const upJson = await up.json();
           if (!up.ok || !upJson?.success) {

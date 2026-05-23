@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 interface Props {
   productoId: string;
@@ -28,7 +29,7 @@ export default function ProductImageUploader({ productoId, initialUrl, initialPa
     if (initialPath && !initialUrl) {
       (async () => {
         try {
-          const res = await fetch(`/api/productos/${productoId}/imagen`, { credentials: "include" });
+          const res = await fetchWithSupabaseSession(`/api/productos/${productoId}/imagen`);
           const json = await res.json();
           if (!cancelled && res.ok && json?.success) {
             setUrl(json.data?.imagen_url ?? null);
@@ -48,10 +49,9 @@ export default function ProductImageUploader({ productoId, initialUrl, initialPa
     try {
       const form = new FormData();
       form.append("file", f);
-      const res = await fetch(`/api/productos/${productoId}/imagen`, {
+      const res = await fetchWithSupabaseSession(`/api/productos/${productoId}/imagen`, {
         method: "POST",
         body: form,
-        credentials: "include",
       });
       const json = await res.json();
       if (!res.ok || !json?.success) {
@@ -74,9 +74,8 @@ export default function ProductImageUploader({ productoId, initialUrl, initialPa
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch(`/api/productos/${productoId}/imagen`, {
+      const res = await fetchWithSupabaseSession(`/api/productos/${productoId}/imagen`, {
         method: "DELETE",
-        credentials: "include",
       });
       const json = await res.json();
       if (!res.ok || !json?.success) {

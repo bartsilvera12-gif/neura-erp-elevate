@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth";
 import { getBrowserSupabaseForEmpresaData } from "@/lib/supabase/browser-data-client";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import type {
   Producto,
   MovimientoInventario,
@@ -110,7 +111,12 @@ function rowToMovimiento(row: MovimientoRow): MovimientoInventario {
 /** Lista productos via API server-side (PG directo, soporta tenants erp_* no expuestos). */
 export async function getProductos(): Promise<Producto[]> {
   try {
-    const r = await fetch("/api/productos", { credentials: "include", cache: "no-store" });
+    // Usar fetchWithSupabaseSession para que adjunte Authorization: Bearer <jwt>
+    // del localStorage del browser. El endpoint /api/productos hace
+    // getTenantSupabaseFromAuth → resolveApiAuthContext, que prefiere el
+    // bearer del header sobre las cookies (cookies pueden no estar disponibles
+    // server-side en cross-domain / Supabase self-hosted con SameSite).
+    const r = await fetchWithSupabaseSession("/api/productos", { cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j?.success) {
       console.error("[inventario] getProductos:", (j as { error?: string })?.error ?? r.status);
@@ -127,8 +133,7 @@ export async function getProductos(): Promise<Producto[]> {
 /** Obtiene un producto por ID via API server-side. */
 export async function getProducto(id: string): Promise<Producto | null> {
   try {
-    const r = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
-      credentials: "include",
+    const r = await fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}`, {
       cache: "no-store",
     });
     const j = await r.json().catch(() => ({}));
@@ -214,11 +219,10 @@ export async function saveProducto(
     familia_olfativa_id: datos.familia_olfativa_id ?? null,
   };
 
-  const res = await fetch("/api/productos", {
+  const res = await fetchWithSupabaseSession("/api/productos", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    credentials: "include",
   });
   const json = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok || !json?.success) {
@@ -281,11 +285,10 @@ export async function updateProducto(
   if (datos.orden_web !== undefined) body.orden_web = datos.orden_web ?? null;
   if (datos.familia_olfativa_id !== undefined) body.familia_olfativa_id = datos.familia_olfativa_id ?? null;
 
-  const res = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
+  const res = await fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    credentials: "include",
   });
   const json = await res.json().catch(() => ({} as Record<string, unknown>));
   if (!res.ok || !json?.success) {
@@ -305,7 +308,7 @@ export async function updateProducto(
 /** Lista movimientos via API server-side (PG directo). */
 export async function getMovimientos(): Promise<MovimientoInventario[]> {
   try {
-    const r = await fetch("/api/inventario/movimientos", { credentials: "include", cache: "no-store" });
+    const r = await fetchWithSupabaseSession("/api/inventario/movimientos", { cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j?.success) {
       console.error("[inventario] getMovimientos:", (j as { error?: string })?.error ?? r.status);

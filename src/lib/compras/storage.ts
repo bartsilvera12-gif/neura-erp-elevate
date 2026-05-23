@@ -1,4 +1,5 @@
 import type { Compra } from "./types";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 interface CompraApiRow {
   id: string; numero_control: string; proveedor_id: string; proveedor_nombre: string;
@@ -39,7 +40,7 @@ function mapRow(r: CompraApiRow): Compra {
 
 export async function getCompras(): Promise<Compra[]> {
   try {
-    const r = await fetch("/api/compras", { credentials: "include", cache: "no-store" });
+    const r = await fetchWithSupabaseSession("/api/compras", { cache: "no-store" });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j?.success) {
       console.error("[compras] getCompras:", (j as { error?: string })?.error ?? r.status);
@@ -67,9 +68,8 @@ export async function saveCompra(
   datos: Omit<Compra, "id" | "numero_control" | "fecha">
 ): Promise<SaveCompraResult | SaveCompraError> {
   try {
-    const r = await fetch("/api/compras", {
+    const r = await fetchWithSupabaseSession("/api/compras", {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(datos),
     });

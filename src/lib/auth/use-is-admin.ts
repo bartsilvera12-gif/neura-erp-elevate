@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 /** Hook simple: devuelve true si el usuario actual tiene rol admin. */
 export function useIsAdmin(): { isAdmin: boolean; loaded: boolean } {
@@ -8,7 +9,7 @@ export function useIsAdmin(): { isAdmin: boolean; loaded: boolean } {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     let cancel = false;
-    fetch("/api/me/rol", { credentials: "include", cache: "no-store" })
+    fetchWithSupabaseSession("/api/me/rol", { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (cancel) return;

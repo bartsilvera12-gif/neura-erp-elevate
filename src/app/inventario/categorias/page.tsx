@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 interface Categoria {
   id: string;
@@ -46,7 +47,7 @@ export default function CategoriasProductosPage() {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch("/api/inventario/categorias?todas=1", { credentials: "include" });
+      const r = await fetchWithSupabaseSession("/api/inventario/categorias?todas=1");
       const j = await r.json();
       if (r.ok && j?.success) setItems(j.data.categorias as Categoria[]);
       else setError(j?.error ?? "No se pudo cargar.");
@@ -64,10 +65,9 @@ export default function CategoriasProductosPage() {
     setCreating(true);
     setError(null);
     try {
-      const r = await fetch("/api/inventario/categorias", {
+      const r = await fetchWithSupabaseSession("/api/inventario/categorias", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({
           nombre: nombre.trim(),
           codigo: codigo.trim() || null,
@@ -89,10 +89,9 @@ export default function CategoriasProductosPage() {
   }
 
   async function toggleActivo(cat: Categoria) {
-    const r = await fetch(`/api/inventario/categorias/${cat.id}`, {
+    const r = await fetchWithSupabaseSession(`/api/inventario/categorias/${cat.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({ activo: !cat.activo }),
     });
     const j = await r.json();
@@ -101,10 +100,9 @@ export default function CategoriasProductosPage() {
   }
 
   async function patchCategoria(id: string, patch: Record<string, unknown>) {
-    const r = await fetch(`/api/inventario/categorias/${id}`, {
+    const r = await fetchWithSupabaseSession(`/api/inventario/categorias/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify(patch),
     });
     const j = await r.json();
