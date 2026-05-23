@@ -38,9 +38,11 @@ const PRODUCTOS_COLS_PRIV =
  * `SUPABASE_DB_URL` solo es válida para scripts/migraciones por SSH.
  */
 export async function GET(request: NextRequest) {
+  const t0 = Date.now();
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
     if (!ctx) {
+      console.log(`[diag-prod] ctx=null status=401 ms=${Date.now() - t0}`);
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const empresaId = ctx.auth.empresa_id;
@@ -57,6 +59,11 @@ export async function GET(request: NextRequest) {
       jwt,
       noStore: true,
     });
+    console.log(
+      `[diag-prod] empresaId=${empresaId} jwt_present=${!!jwt} pg_ok=${r.ok} rows=${
+        r.ok ? r.rows.length : -1
+      }${r.ok ? "" : " err=" + (r.error?.message ?? "?")} ms=${Date.now() - t0}`
+    );
     if (!r.ok) {
       console.error("[/api/productos GET]", r.error);
       return NextResponse.json(errorResponse("No se pudieron cargar los productos."), { status: 502 });
