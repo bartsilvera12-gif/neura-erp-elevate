@@ -2015,7 +2015,12 @@ export default function DashboardPage() {
           .map((v) => v.slug)
           .filter((s): s is TabDash => isDashboardTabSlug(s));
         if (slugs.length === 0) {
-          if (!cancelled) setDashScope({ kind: "empty" });
+          // Antes caíamos en kind:"empty" mostrando "Sin vistas asignadas".
+          // En modo single_client (Elevate) eso no aplica: si el endpoint
+          // no devuelve vistas mapeadas, usamos las 4 vistas legacy (que
+          // existen en el catálogo) para que el dashboard siempre sea
+          // navegable.
+          if (!cancelled) setDashScope({ kind: "legacy" });
           return;
         }
         const defRaw = j.defaultSlug ?? null;
@@ -2104,13 +2109,14 @@ export default function DashboardPage() {
   };
 
   if (!config) {
-    return <ZentraLoadingScreen fullScreen={false} />;
+    return <ZentraLoadingScreen />;
   }
 
   // Mientras el endpoint /api/empresas/mis-dashboard-views todavía no resuelve,
-  // mostrar la pantalla de carga Zentra en vez de un dashboard vacío.
+  // mostrar la pantalla de carga Zentra fullscreen (cubre sidebar/topbar
+  // via portal).
   if (dashScope.kind === "pending") {
-    return <ZentraLoadingScreen fullScreen={false} />;
+    return <ZentraLoadingScreen />;
   }
 
   // Control de acceso
