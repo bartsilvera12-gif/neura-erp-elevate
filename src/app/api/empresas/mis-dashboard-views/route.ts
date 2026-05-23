@@ -2,8 +2,25 @@ import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { resolveEffectiveDashboardViews } from "@/lib/dashboard/resolve-effective-dashboard-views";
-import { isStrictAllowlistMode } from "@/lib/modulos/resolve-effective-modules";
 import { NextResponse } from "next/server";
+
+type DashView = { id: string; nombre: string; slug: string; orden: number };
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchCatalogoActivo(supabase: any): Promise<DashView[]> {
+  const { data, error } = await supabase
+    .from("dashboard_views")
+    .select("id, nombre, slug, orden")
+    .eq("activo", true)
+    .order("orden", { ascending: true });
+  if (error || !Array.isArray(data)) return [];
+  return data.map((m: { id?: unknown; nombre?: unknown; slug?: unknown; orden?: unknown }) => ({
+    id: String(m.id ?? ""),
+    nombre: String(m.nombre ?? ""),
+    slug: String(m.slug ?? ""),
+    orden: Number(m.orden) || 0,
+  }));
+}
 
 /**
  * GET /api/empresas/mis-dashboard-views
@@ -35,52 +52,47 @@ export async function GET(request: Request) {
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
 
+    // Fallback 1: si no se resolvió el usuario ERP, devolver el catálogo
+    // activo. Instancia single_client = sin riesgo cross-tenant.
     if (!usuario) {
       console.warn("[mis-dashboard-views] resolveUsuario null", {
         authUserId: user.id,
         email: user.email ?? null,
       });
-      // Fallback single_client: devolver el catálogo activo.
-      if (isStrictAllowlistMode()) {
-        try {
-          const { data, error } = await supabase
-            .from("dashboard_views")
-            .select("id, nombre, slug, orden")
-            .eq("activo", true)
-            .order("orden", { ascending: true });
-          if (!error && Array.isArray(data) && data.length > 0) {
-            const views = data.map((m: { id?: unknown; nombre?: unknown; slug?: unknown; orden?: unknown }) => ({
-              id: String(m.id ?? ""),
-              nombre: String(m.nombre ?? ""),
-              slug: String(m.slug ?? ""),
-              orden: Number(m.orden) || 0,
-            }));
-            return NextResponse.json({
-              views,
-              defaultSlug: views[0]?.slug ?? null,
-              defaultViewId: views[0]?.id ?? null,
-            });
-          }
-        } catch (e) {
-          console.error("[mis-dashboard-views] fallback catalog query", e);
-        }
-      }
-      return NextResponse.json({ views: [], defaultSlug: null, defaultViewId: null });
+      const views = await fetchCatalogoActivo(supabase);
+      return NextResponse.json({
+        views,
+        defaultSlug: views[0]?.slug ?? null,
+        defaultViewId: views[0]?.id ?? null,
+      });
     }
 
-    const eff = await resolveEffectiveDashboardViews(supabase, {
-      id: usuario.id,
-      empresa_id: usuario.empresa_id,
-      rol: usuario.rol,
-    });
+    let eff;
+    try {
+      eff = await resolveEffectiveDashboardViews(supabase, {
+        id: usuario.id,
+        empresa_id: usuario.empresa_id,
+        rol: usuario.rol,
+      });
+    } catch (e) {
+      console.error("[mis-dashboard-views] resolver throw", e);
+      eff = { views: [], defaultViewId: null, defaultSlug: null };
+    }
 
-    // Log defensivo: si después de resolver el usuario igual quedan 0 vistas,
-    // dejamos rastro en logs sin exponer datos sensibles.
+    // Fallback 2: si el resolver devuelve 0 vistas por cualquier razón (RLS
+    // edge case, race condition, env mal cargada), devolver el catálogo
+    // activo. Sin esto el dashboard queda con "Sin vistas asignadas".
     if (eff.views.length === 0) {
-      console.warn("[mis-dashboard-views] resolver retornó 0 views", {
+      console.warn("[mis-dashboard-views] resolver retornó 0 views → fallback catalogo", {
         usuario_id: usuario.id,
         empresa_id: usuario.empresa_id,
         rol: usuario.rol,
+      });
+      const views = await fetchCatalogoActivo(supabase);
+      return NextResponse.json({
+        views,
+        defaultSlug: views[0]?.slug ?? null,
+        defaultViewId: views[0]?.id ?? null,
       });
     }
 

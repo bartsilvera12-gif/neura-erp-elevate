@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import { ZentraLoadingScreen } from "@/components/ui/ZentraLoadingScreen";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -2103,14 +2104,13 @@ export default function DashboardPage() {
   };
 
   if (!config) {
-    return (
-      <div
-        className="flex min-h-[40vh] items-center justify-center rounded-2xl py-24 text-sm"
-        style={{ backgroundColor: Z.bg, color: Z.muted }}
-      >
-        Cargando…
-      </div>
-    );
+    return <ZentraLoadingScreen fullScreen={false} />;
+  }
+
+  // Mientras el endpoint /api/empresas/mis-dashboard-views todavía no resuelve,
+  // mostrar la pantalla de carga Zentra en vez de un dashboard vacío.
+  if (dashScope.kind === "pending") {
+    return <ZentraLoadingScreen fullScreen={false} />;
   }
 
   // Control de acceso
