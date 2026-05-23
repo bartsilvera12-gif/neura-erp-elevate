@@ -68,6 +68,26 @@ function extractBearer(request: Request): string | null {
   return t || null;
 }
 
+/**
+ * Decodifica el payload del JWT SIN validar la firma (solo para extraer
+ * `sub` y `email`). La validación real ocurre en PostgREST con cada query
+ * `Authorization: Bearer ...`: si el JWT es inválido, las queries devuelven
+ * 401 y respondemos no-autenticado. Evita 1 round-trip HTTP a Supabase Auth
+ * (~3-5s desde Hostinger Paraguay) que solo replicaba esa validación.
+ */
+function decodeJwtPayloadUnsafe(token: string): { sub?: string; email?: string; exp?: number } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64 + "===".slice(0, (4 - (b64.length % 4)) % 4);
+    const json = Buffer.from(pad, "base64").toString("utf-8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   const total0 = performance.now();
   try {
@@ -85,13 +105,17 @@ export async function GET(request: Request) {
     let userScoped: AppSupabaseClient;
 
     if (bearer) {
-      const authOnly = createClient(url, anonKey);
-      const { data, error } = await authOnly.auth.getUser(bearer);
-      if (error || !data.user?.id) {
+      // Decodificar JWT localmente para evitar un round-trip a Supabase Auth.
+      // PostgREST validará la firma del bearer en cada query posterior; si el
+      // JWT es inválido devolverá 401 y respondemos no-autenticado.
+      const payload = decodeJwtPayloadUnsafe(bearer);
+      const sub = payload?.sub;
+      const exp = payload?.exp;
+      if (!sub || (exp && exp * 1000 < Date.now())) {
         return NextResponse.json({ error: "No autenticado" }, { status: 401 });
       }
-      userId = data.user.id;
-      userEmail = data.user.email ?? null;
+      userId = sub;
+      userEmail = payload?.email ?? null;
       userScoped = createClient(url, anonKey, {
         auth: { autoRefreshToken: false, persistSession: false },
         global: { headers: { Authorization: `Bearer ${bearer}` } },
