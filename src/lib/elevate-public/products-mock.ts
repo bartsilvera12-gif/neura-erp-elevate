@@ -16,7 +16,10 @@
  */
 
 export type ProductStatus = "available" | "low" | "out" | "soon";
-export type ProductCategory = "Nicho" | "Ultranicho" | "Diseñador" | "Árabe Premium";
+// Categorías legacy del mock; los productos reales aceptan cualquier string
+// (las nuevas se crean desde el ERP y vienen de elevate.categorias_productos).
+export type LegacyProductCategory = "Nicho" | "Ultranicho" | "Diseñador" | "Árabe Premium";
+export type ProductCategory = LegacyProductCategory | (string & {});
 
 export interface Product {
   id: string;

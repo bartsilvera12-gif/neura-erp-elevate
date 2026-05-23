@@ -45,16 +45,6 @@ type ApiListaProducto = {
   orden_web: number | null;
 };
 
-/** Set canónico de las 4 categorías esperadas del mock (case-insensitive). */
-const KNOWN_CATEGORIES: ProductCategory[] = ["Nicho", "Ultranicho", "Diseñador", "Árabe Premium"];
-
-function normalizeCategoryName(name: string | null | undefined): ProductCategory | null {
-  if (!name) return null;
-  const lower = name.trim().toLowerCase();
-  const match = KNOWN_CATEGORIES.find((c) => c.toLowerCase() === lower);
-  return match ?? null;
-}
-
 export type ApiDetalleProducto = ApiListaProducto & {
   descripcion_web: string | null;
   notas_top: string[];
@@ -96,13 +86,14 @@ function buildSize(volumen_ml: number | null): string {
 export function apiToMockProduct(api: ApiListaProducto): Product {
   const fromMock = mockProducts.find((m) => m.slug === api.slug);
   // Resolución de categoría:
-  //   1. La que viene de DB vía categoria_nombre (Fase 1 catálogo web).
+  //   1. categoria_nombre REAL de DB (Fase 1: cualquier categoría que el
+  //      cliente cree desde el ERP). Se usa cruda — no se normaliza a un set
+  //      cerrado para no descartar categorías nuevas.
   //   2. Fallback al mock por slug (compat con productos seed).
-  //   3. Inferencia legacy por marca (defaultCategoryFor) — temporal mientras
-  //      productos sin categoria_principal_id se van migrando.
-  const categoriaDb = normalizeCategoryName(api.categoria_nombre ?? null);
+  //   3. Inferencia legacy por marca solo si no hay categoría DB ni mock.
+  const categoriaDb = (api.categoria_nombre ?? "").trim();
   const category: ProductCategory =
-    categoriaDb ?? fromMock?.category ?? defaultCategoryFor(api.marca);
+    categoriaDb || fromMock?.category || defaultCategoryFor(api.marca);
   return {
     id: api.id,
     slug: api.slug ?? "",
