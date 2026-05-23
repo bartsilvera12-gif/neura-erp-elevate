@@ -80,11 +80,16 @@ function toVentaResponse(
  * POST /api/ventas/create — venta + ítems + stock + movimientos (una transacción Postgres).
  */
 export async function POST(request: NextRequest) {
+  const t0 = Date.now();
+  const bearerPresent = !!request.headers.get("authorization");
   try {
+    console.log(`[diag-venta] POST start bearer=${bearerPresent}`);
     const auth = await getUserAndEmpresa(request);
     if (!auth) {
+      console.log(`[diag-venta] auth=null bearer=${bearerPresent} ms=${Date.now() - t0}`);
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
+    console.log(`[diag-venta] auth_ok empresa=${auth.empresa_id} bearer=${bearerPresent}`);
 
     let body: unknown;
     try {
@@ -167,9 +172,12 @@ export async function POST(request: NextRequest) {
       total: tot,
     });
 
+    console.log(`[diag-venta] success numero=${numeroControl} total=${tot} ms=${Date.now() - t0}`);
     return NextResponse.json(successResponse({ venta }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error al crear la venta.";
+    const stack = err instanceof Error ? err.stack?.split("\n").slice(0, 3).join(" | ") : "";
+    console.error(`[diag-venta] FAIL msg="${msg}" stack=${stack} ms=${Date.now() - t0}`);
     const status =
       msg.includes("Stock insuficiente") ||
       msg.includes("no existen") ||

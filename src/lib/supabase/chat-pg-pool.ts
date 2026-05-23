@@ -86,6 +86,40 @@ export function getChatPostgresConnectionString(): string | null {
 }
 
 /**
+ * Resuelve si la conexión pg debe usar TLS, basándose en el HOST de la URL
+ * (no en el username). Cloud Supabase (`db.*.supabase.co`) requiere TLS;
+ * Postgres en loopback (127.0.0.1 / localhost) del Docker self-hosted NO
+ * lo soporta. La heurística anterior (`url.includes("supabase")`) era falsa
+ * positiva cuando el USER se llamaba `supabase` y forzaba TLS contra
+ * loopback → "The server does not support SSL connections".
+ *
+ * Override explícito vía SUPABASE_DB_SSL=true|false si hace falta.
+ */
+function shouldUsePgSsl(connectionString: string): boolean {
+  const force = process.env.SUPABASE_DB_SSL?.trim().toLowerCase();
+  if (force === "true" || force === "1") return true;
+  if (force === "false" || force === "0") return false;
+  // sslmode=require/verify-full/verify-ca en query string fuerza TLS
+  if (/[?&]sslmode=(require|verify-full|verify-ca|prefer)/i.test(connectionString)) return true;
+  if (/[?&]sslmode=disable/i.test(connectionString)) return false;
+  // Extraer host de la URL para decidir
+  try {
+    const u = new URL(connectionString);
+    const host = u.hostname.toLowerCase();
+    if (host === "127.0.0.1" || host === "localhost" || host === "::1") return false;
+    // Redes privadas: tampoco TLS por default
+    if (/^10\./.test(host) || /^192\.168\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+    // Cloud Supabase requiere TLS
+    if (/\.supabase\.co$/i.test(host)) return true;
+    // Default: usar TLS para cualquier host público desconocido (back-compat)
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Pool Postgres directo (pooler). Una instancia global por runtime — no instanciar Pool por request.
  * Preferir en Vercel: URL del transaction pooler (puerto 6543, modo transaction) si preparación de sesión lo permite.
  */
@@ -105,7 +139,7 @@ export function getChatPostgresPool(): pg.Pool | null {
       idleTimeoutMillis: 20_000,
       connectionTimeoutMillis: 12_000,
       allowExitOnIdle: true,
-      ssl: url.includes("supabase") ? { rejectUnauthorized: false } : undefined,
+      ssl: shouldUsePgSsl(url) ? { rejectUnauthorized: false } : undefined,
     });
     pool.on("error", (err) => {
       console.error("[pg-pool][idle-client-error]", err instanceof Error ? err.message : String(err));
