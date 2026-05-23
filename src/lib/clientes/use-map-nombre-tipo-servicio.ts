@@ -26,15 +26,6 @@ export function useMapNombreTipoServicioCatalogo(entradas: readonly ConTipoSlug[
   useEffect(() => {
     let cancel = false;
     const need = slugsKey ? slugsKey.split(",") : [];
-    // Evita disparar /api/cliente-tipos-servicio durante la carga inicial cuando
-    // todavía no hay clientes resueltos (slugsKey === ""). En Hostinger ese
-    // endpoint responde 401 tras 20s mientras la auth se resuelve, bloqueando
-    // el dashboard. Si no hay slugs por mapear, los fallback del sistema bastan.
-    if (need.length === 0) {
-      return () => {
-        cancel = true;
-      };
-    }
     (async () => {
       const bySlug = new Map<string, ClienteTipoServicioRow>();
       const base = await fetchTiposFormCliente();

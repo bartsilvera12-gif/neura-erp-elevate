@@ -234,10 +234,6 @@ function toNum(v: unknown): number {
 
 /**
  * Prospectos vía `/api/crm/prospectos` (tenant + service role), alineado al CRM Funnel.
- *
- * En Hostinger el endpoint puede tardar 20s en devolver 401 cuando la auth se
- * está resolviendo en paralelo con tenant-tables. Aplicamos timeout corto y
- * fallback `[]` para no bloquear el dashboard.
  */
 async function fetchProspectos(): Promise<ProspectoRaw[]> {
   const prospectosFromCrm = await getProspectos();
@@ -255,26 +251,12 @@ async function fetchProspectos(): Promise<ProspectoRaw[]> {
   }));
 }
 
-async function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const timeoutP = new Promise<T>((resolve) => {
-    timer = setTimeout(() => resolve(fallback), ms);
-  });
-  try {
-    return await Promise.race([p, timeoutP]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 /**
  * Dashboard: tablas operativas vía `/api/dashboard/tenant-tables` (service role + schema tenant).
  * No depende del cliente browser + RLS en esquemas `erp_*`.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-  // Prospectos y tenant-tables se cargan en paralelo. Antes era secuencial,
-  // sumando 21s (prospectos) + N segundos (tenant-tables) en frío.
-  const prospectosPromise = withTimeout(fetchProspectos(), 6000, [] as ProspectoRaw[]);
+  const prospectos = await fetchProspectos();
 
   let clientes: ClienteRaw[] = [];
   let facturas: FacturaRaw[] = [];
@@ -291,7 +273,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   if (typeof window === "undefined") {
     return {
-      prospectos: await prospectosPromise,
+      prospectos,
       clientes,
       facturas,
       pagos,
@@ -481,8 +463,6 @@ export async function getDashboardData(): Promise<DashboardData> {
     console.warn("[dashboard] Error cargando tablas empresa (clientes, facturas, etc.):", err);
     // prospectos ya cargados; clientes, facturas, etc. quedan vacíos
   }
-
-  const prospectos = await prospectosPromise;
 
   return {
     prospectos,
