@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 export interface ProductoPickerItem {
   id: string;
@@ -90,7 +91,7 @@ export default function ProductPickerModal({
         const url = new URL("/api/productos/search", window.location.origin);
         if (q.trim().length >= 2) url.searchParams.set("q", q.trim());
         url.searchParams.set("limit", "50");
-        const res = await fetch(url.toString(), { credentials: "include" });
+        const res = await fetchWithSupabaseSession(url.toString());
         const json = await res.json();
         if (!res.ok || !json?.success) {
           setError(json?.error ?? "Error al buscar productos");
