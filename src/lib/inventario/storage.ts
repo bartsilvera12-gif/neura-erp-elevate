@@ -39,6 +39,17 @@ interface ProductoRow {
   descripcion_web?: string | null;
   marca?: string | null;
   precio_web?: number | null;
+  /* Catálogo enriquecido (Fase 1 catálogo) — el endpoint singular los devuelve
+   * desde el fix 519d10f; faltaba que el mapper los pasara al form. */
+  precio_oferta?: number | null;
+  oferta_hasta?: string | null;
+  nuevo_hasta?: string | null;
+  concentracion?: string | null;
+  volumen_ml?: number | null;
+  genero?: string | null;
+  proximamente?: boolean | null;
+  orden_web?: number | null;
+  familia_olfativa_id?: string | null;
 }
 
 interface MovimientoRow {
@@ -62,6 +73,12 @@ interface MovimientoRow {
 // ─── Mapeo fila → tipo ────────────────────────────────────────────────────────
 
 function rowToProducto(row: ProductoRow): Producto {
+  // Whitelist explícito de géneros válidos (la interface Producto los exige).
+  const generoRaw = (row.genero ?? "").toLowerCase();
+  const generoOk: Producto["genero"] =
+    generoRaw === "masculino" || generoRaw === "femenino" || generoRaw === "unisex"
+      ? generoRaw
+      : null;
   return {
     id: row.id,
     nombre: row.nombre,
@@ -86,6 +103,17 @@ function rowToProducto(row: ProductoRow): Producto {
     descripcion_web: row.descripcion_web ?? null,
     marca: row.marca ?? null,
     precio_web: row.precio_web == null ? null : Number(row.precio_web),
+    // Fix: estos campos venían del backend pero el mapper los descartaba,
+    // dejando el form de edición vacío aunque la DB y el endpoint los traían.
+    precio_oferta: row.precio_oferta == null ? null : Number(row.precio_oferta),
+    oferta_hasta: row.oferta_hasta ?? null,
+    nuevo_hasta: row.nuevo_hasta ?? null,
+    concentracion: row.concentracion ?? null,
+    volumen_ml: row.volumen_ml == null ? null : Number(row.volumen_ml),
+    genero: generoOk,
+    proximamente: row.proximamente === true,
+    orden_web: row.orden_web == null ? null : Number(row.orden_web),
+    familia_olfativa_id: row.familia_olfativa_id ?? null,
   };
 }
 
