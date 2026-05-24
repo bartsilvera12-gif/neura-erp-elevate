@@ -171,8 +171,13 @@ export default function ProductPickerModal({
   const enCarritoSel = sel ? excludeIds.filter((id) => id === sel.id).length : 0;
   const dispSel = sel ? sel.stock_actual - enCarritoSel : 0;
   const precioGsEquiv = moneda === "USD" ? (parseFloat(precio) || 0) * (tipoCambio || 0) : (parseFloat(precio) || 0);
-  const subtotal = (parseInt(cantidad, 10) || 0) * precioGsEquiv;
-  const ivaMonto = iva === "10%" ? subtotal * 0.10 : iva === "5%" ? subtotal * 0.05 : 0;
+  // Regla Elevate: precio cargado YA incluye IVA. Total línea = precio × cantidad;
+  // IVA es componente interno; subtotal (base) = total − IVA.
+  const totalLineaPicker = (parseInt(cantidad, 10) || 0) * precioGsEquiv;
+  const ivaMonto = iva === "EXENTA" || totalLineaPicker <= 0
+    ? 0
+    : totalLineaPicker - totalLineaPicker / (1 + (iva === "5%" ? 0.05 : 0.10));
+  const subtotal = totalLineaPicker - ivaMonto;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm pt-12 px-4" onClick={onClose}>
@@ -363,7 +368,7 @@ export default function ProductPickerModal({
                   <div className="text-xs text-slate-500 space-y-0.5 pt-1">
                     <div className="flex justify-between"><span>Subtotal</span><span className="tabular-nums">{formatGs(subtotal)}</span></div>
                     <div className="flex justify-between"><span>IVA</span><span className="tabular-nums">{ivaMonto > 0 ? formatGs(ivaMonto) : "—"}</span></div>
-                    <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-200"><span>Total línea</span><span className="tabular-nums">{formatGs(subtotal + ivaMonto)}</span></div>
+                    <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-200"><span>Total línea</span><span className="tabular-nums">{formatGs(totalLineaPicker)}</span></div>
                   </div>
 
                   <button

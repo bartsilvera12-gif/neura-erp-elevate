@@ -15,10 +15,28 @@ function formatGs(valor: number) {
   return `Gs. ${Math.round(valor).toLocaleString("es-PY")}`;
 }
 
-function calcIva(tipo: TipoIvaVenta, base: number) {
+/**
+ * IVA INCLUIDO en el precio.
+ *
+ * Regla de negocio Elevate: el precio de venta cargado en el ERP ya incluye
+ * IVA. Si el vendedor ingresa Gs. 670.000 con IVA 10%, el total de la línea
+ * es Gs. 670.000 — el IVA es un COMPONENTE interno (Gs. 60.909 aprox), no se
+ * suma encima.
+ *
+ * Fórmula:
+ *   IVA incluido = total_con_iva - total_con_iva / (1 + tasa)
+ *   - 10% → total/11 ≈ 9.09% del total final
+ *   -  5% → total/21 ≈ 4.76% del total final
+ *   EXENTA → 0
+ *
+ * Devuelve el monto de IVA contenido en `totalConIva`. La base imponible
+ * (subtotal SET) se obtiene como `totalConIva - ivaIncluido`.
+ */
+function ivaIncluido(tipo: TipoIvaVenta, totalConIva: number) {
   if (tipo === "EXENTA") return 0;
-  if (tipo === "5%")     return base * 0.05;
-  return base * 0.10;
+  if (totalConIva <= 0)  return 0;
+  const tasa = tipo === "5%" ? 0.05 : 0.10;
+  return totalConIva - totalConIva / (1 + tasa);
 }
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
@@ -169,9 +187,11 @@ export default function NuevaVentaPage() {
       // El modal mostrara su propio feedback; tambien actualizamos el banner.
       return false;
     }
-    const subtotal = cantidad * precioPyg;
-    const montoIva = calcIva(iva, subtotal);
-    const totalLinea = subtotal + montoIva;
+    // Precio ingresado YA incluye IVA (regla Elevate). total = precio*cantidad,
+    // monto_iva es el componente IVA dentro del total y subtotal = base imponible.
+    const totalLinea = cantidad * precioPyg;
+    const montoIva = ivaIncluido(iva, totalLinea);
+    const subtotal = totalLinea - montoIva;
 
     // Asegurar que el producto este en el array local (para que stock_actual
     // se conozca en validaciones posteriores del form inline).
@@ -237,9 +257,11 @@ export default function NuevaVentaPage() {
     .reduce((s, i) => s + i.cantidad, 0);
   const stockDisp = (prodSel?.stock_actual ?? 0) - enCarrito;
 
-  const lineaSubtotal   = cantNum > 0 && precioGs > 0 ? cantNum * precioGs : 0;
-  const lineaMontoIva   = calcIva(lineaIva, lineaSubtotal);
-  const lineaTotalLinea = lineaSubtotal + lineaMontoIva;
+  // Precio cargado ya incluye IVA: total línea = precio × cantidad,
+  // IVA es componente interno, subtotal (base imponible) = total − IVA.
+  const lineaTotalLinea = cantNum > 0 && precioGs > 0 ? cantNum * precioGs : 0;
+  const lineaMontoIva   = ivaIncluido(lineaIva, lineaTotalLinea);
+  const lineaSubtotal   = lineaTotalLinea - lineaMontoIva;
 
   const stockInsuf  = prodSel !== undefined && cantNum > 0 && cantNum > stockDisp;
   const lineaValida =
