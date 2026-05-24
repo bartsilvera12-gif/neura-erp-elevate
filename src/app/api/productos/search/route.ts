@@ -14,6 +14,10 @@ interface ProductoRowEmbed {
   codigo_barras: string | null;
   codigo_barras_interno: boolean | null;
   precio_venta: string | number | null;
+  /** Precio promocional (web). Si está cargado y `oferta_hasta` es null o futuro, manda. */
+  precio_oferta: string | number | null;
+  /** Vigencia de la oferta. Null = vigente indefinido si precio_oferta > 0. */
+  oferta_hasta: string | null;
   costo_promedio: string | number | null;
   stock_actual: string | number | null;
   stock_minimo: string | number | null;
@@ -33,6 +37,12 @@ interface ProductoSearchHit {
   codigo_barras: string | null;
   codigo_barras_interno: boolean;
   precio_venta: number;
+  /** Precio promocional cargado en el editor (0 si no hay). Cliente puede mostrarlo tachado. */
+  precio_oferta: number;
+  /** Vigencia de la oferta en ISO. null = vigente indefinido (si precio_oferta > 0). */
+  oferta_hasta: string | null;
+  /** Conveniencia: precio que el picker debe usar como sugerido = oferta si vigente, sino precio_venta. */
+  precio_efectivo: number;
   costo_promedio: number;
   stock_actual: number;
   stock_minimo: number;
@@ -51,7 +61,8 @@ const MAX_LIMIT = 100;
 const MAX_TOKENS = 6;
 const SELECT_COLS =
   "id,nombre,sku,codigo_barras,codigo_barras_interno," +
-  "precio_venta,costo_promedio,stock_actual,stock_minimo," +
+  "precio_venta,precio_oferta,oferta_hasta," +
+  "costo_promedio,stock_actual,stock_minimo," +
   "unidad_medida,metodo_valuacion,imagen_path,imagen_url," +
   "categoria:categoria_principal_id(nombre)," +
   "proveedor:proveedor_principal_id(nombre)," +
@@ -138,25 +149,52 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    const hits: ProductoSearchHit[] = rows.map((row, i) => ({
-      id: row.id,
-      nombre: row.nombre,
-      sku: row.sku,
-      codigo_barras: row.codigo_barras,
-      codigo_barras_interno: row.codigo_barras_interno === true,
-      precio_venta: Number(row.precio_venta ?? 0),
-      costo_promedio: Number(row.costo_promedio ?? 0),
-      stock_actual: Number(row.stock_actual ?? 0),
-      stock_minimo: Number(row.stock_minimo ?? 0),
-      unidad_medida: row.unidad_medida,
-      metodo_valuacion: row.metodo_valuacion,
-      imagen_path: row.imagen_path,
-      imagen_url: (i < SIGN_TOP ? signedUrls[i] : null) ?? row.imagen_url ?? null,
-      categoria_nombre: row.categoria?.nombre ?? null,
-      proveedor_nombre: row.proveedor?.nombre ?? null,
-      ubicacion_nombre: row.ubicacion?.nombre ?? null,
-      ubicacion_tipo: row.ubicacion?.tipo ?? null,
-    }));
+    /**
+     * Resuelve precio efectivo server-side: si la oferta está cargada y
+     * vigente, manda; sino precio_venta. `oferta_hasta` null se interpreta
+     * como "vigente indefinido" siempre que `precio_oferta > 0`.
+     */
+    const ahora = Date.now();
+    function precioEfectivoOf(
+      precioVenta: number,
+      precioOferta: number,
+      ofertaHasta: string | null
+    ): number {
+      if (!(precioOferta > 0)) return precioVenta;
+      if (!ofertaHasta) return precioOferta;
+      const t = Date.parse(ofertaHasta);
+      if (!Number.isFinite(t)) return precioVenta;
+      return t >= ahora ? precioOferta : precioVenta;
+    }
+
+    const hits: ProductoSearchHit[] = rows.map((row, i) => {
+      const precioVenta = Number(row.precio_venta ?? 0);
+      const precioOferta = Number(row.precio_oferta ?? 0);
+      const ofertaHasta = row.oferta_hasta ?? null;
+      const precioEfectivo = precioEfectivoOf(precioVenta, precioOferta, ofertaHasta);
+      return {
+        id: row.id,
+        nombre: row.nombre,
+        sku: row.sku,
+        codigo_barras: row.codigo_barras,
+        codigo_barras_interno: row.codigo_barras_interno === true,
+        precio_venta: precioVenta,
+        precio_oferta: precioOferta,
+        oferta_hasta: ofertaHasta,
+        precio_efectivo: precioEfectivo,
+        costo_promedio: Number(row.costo_promedio ?? 0),
+        stock_actual: Number(row.stock_actual ?? 0),
+        stock_minimo: Number(row.stock_minimo ?? 0),
+        unidad_medida: row.unidad_medida,
+        metodo_valuacion: row.metodo_valuacion,
+        imagen_path: row.imagen_path,
+        imagen_url: (i < SIGN_TOP ? signedUrls[i] : null) ?? row.imagen_url ?? null,
+        categoria_nombre: row.categoria?.nombre ?? null,
+        proveedor_nombre: row.proveedor?.nombre ?? null,
+        ubicacion_nombre: row.ubicacion?.nombre ?? null,
+        ubicacion_tipo: row.ubicacion?.tipo ?? null,
+      };
+    });
 
     return NextResponse.json(successResponse({ items: hits, count: hits.length, q }));
   } catch (err) {

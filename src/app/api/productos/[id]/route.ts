@@ -20,7 +20,12 @@ const PRODUCTO_COLS_PRIV =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web";
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web," +
+  // Fix: estas columnas faltaban y causaban que el editor reabriera el producto
+  // con los campos del catálogo web / promo vacíos aunque estuvieran guardados
+  // en DB (el PATCH sí los persistía; solo el GET no los traía de vuelta).
+  "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
+  "proximamente,orden_web,familia_olfativa_id";
 
 type ProductoRow = Record<string, unknown> & { id?: string };
 

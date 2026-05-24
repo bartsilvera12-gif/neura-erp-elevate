@@ -10,6 +10,12 @@ export interface ProductoPickerItem {
   codigo_barras: string | null;
   codigo_barras_interno: boolean;
   precio_venta: number;
+  /** Precio promocional cargado en el editor (0 si no hay). */
+  precio_oferta?: number;
+  /** Vigencia ISO de la oferta. null = vigente indefinido si precio_oferta > 0. */
+  oferta_hasta?: string | null;
+  /** Precio sugerido a usar en la venta: oferta si vigente, sino precio_venta. Calculado server-side. */
+  precio_efectivo?: number;
   costo_promedio: number;
   stock_actual: number;
   stock_minimo: number;
@@ -21,6 +27,22 @@ export interface ProductoPickerItem {
   proveedor_nombre: string | null;
   ubicacion_nombre: string | null;
   ubicacion_tipo: string | null;
+}
+
+/** True si el producto tiene oferta cargada y vigente. */
+function tieneOfertaVigente(p: ProductoPickerItem): boolean {
+  const po = Number(p.precio_oferta ?? 0);
+  if (!(po > 0)) return false;
+  if (!p.oferta_hasta) return true;
+  const t = Date.parse(p.oferta_hasta);
+  if (!Number.isFinite(t)) return false;
+  return t >= Date.now();
+}
+
+/** Devuelve el precio en Gs. a usar como sugerido en la línea de venta. */
+function precioSugerido(p: ProductoPickerItem): number {
+  if (typeof p.precio_efectivo === "number" && p.precio_efectivo > 0) return p.precio_efectivo;
+  return tieneOfertaVigente(p) ? Number(p.precio_oferta ?? 0) : p.precio_venta;
 }
 
 /**
@@ -110,8 +132,9 @@ export default function ProductPickerModal({
   function selectProducto(p: ProductoPickerItem) {
     setSel(p);
     setCantidad("1");
-    // Precio inicial: en la moneda de la venta
-    const precioGs = p.precio_venta;
+    // Precio inicial sugerido: oferta vigente si existe, sino precio_venta.
+    // El vendedor puede editarlo libremente en el form de la línea.
+    const precioGs = precioSugerido(p);
     if (moneda === "USD" && tipoCambio > 0) {
       setPrecio(String(Math.round((precioGs / tipoCambio) * 100) / 100));
     } else {
@@ -226,7 +249,14 @@ export default function ProductPickerModal({
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className="text-sm font-semibold text-slate-800 tabular-nums">{formatGs(p.precio_venta)}</div>
+                        {tieneOfertaVigente(p) ? (
+                          <div className="flex flex-col items-end leading-tight">
+                            <span className="text-[11px] text-slate-400 line-through tabular-nums">{formatGs(p.precio_venta)}</span>
+                            <span className="text-sm font-semibold text-emerald-600 tabular-nums">{formatGs(Number(p.precio_oferta ?? 0))}</span>
+                          </div>
+                        ) : (
+                          <div className="text-sm font-semibold text-slate-800 tabular-nums">{formatGs(p.precio_venta)}</div>
+                        )}
                         <div className={`text-xs tabular-nums ${sinStock ? "text-red-500" : "text-slate-500"}`}>
                           {sinStock ? "Sin stock" : `${disp} ${p.unidad_medida}`}
                         </div>
@@ -270,7 +300,15 @@ export default function ProductPickerModal({
                   <DetailItem label="Proveedor" value={sel.proveedor_nombre} />
                   <DetailItem label="Ubicación" value={sel.ubicacion_nombre ? `${sel.ubicacion_nombre} (${sel.ubicacion_tipo})` : null} />
                   <DetailItem label="Unidad" value={sel.unidad_medida} />
-                  <DetailItem label="Precio venta" value={formatGs(sel.precio_venta)} highlight />
+                  <DetailItem
+                    label={tieneOfertaVigente(sel) ? "Oferta vigente" : "Precio venta"}
+                    value={
+                      tieneOfertaVigente(sel)
+                        ? `${formatGs(Number(sel.precio_oferta ?? 0))} (antes ${formatGs(sel.precio_venta)})`
+                        : formatGs(sel.precio_venta)
+                    }
+                    highlight
+                  />
                   <DetailItem label="Stock disp." value={`${dispSel} ${sel.unidad_medida}`} highlight />
                 </div>
 
