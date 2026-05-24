@@ -82,11 +82,14 @@ export function WebTopProductsCard() {
   const isEmpty = useMemo(() => !loading && (items?.length ?? 0) === 0, [loading, items]);
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+    <div
+      data-testid="web-top-products-card"
+      className="bg-gradient-to-br from-sky-50 to-white border-2 border-sky-200 rounded-xl shadow-sm p-6"
+    >
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-[#0EA5E9]" aria-hidden="true" />
-          <h2 className="text-xl font-semibold text-gray-800">
+          <TrendingUp size={20} className="text-[#0EA5E9]" aria-hidden="true" />
+          <h2 className="text-xl font-bold text-[#0369A1]">
             Top 10 perfumes más buscados en la web
           </h2>
         </div>

@@ -76,15 +76,18 @@ interface RankItem {
 }
 
 export async function GET(request: NextRequest) {
+  const t0 = Date.now();
   try {
     const auth = await getUserAndEmpresa(request);
     if (!auth) {
+      console.log("[web-top-products] 401 (no auth)");
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
 
     const url = new URL(request.url);
     const range = parseRange(url.searchParams.get("range"));
     const since = rangeToSinceIso(range);
+    console.log(`[web-top-products] GET range=${range} empresa=${auth.empresa_id}`);
 
     const pool = getChatPostgresPool();
     if (!pool) {
@@ -139,6 +142,9 @@ export async function GET(request: NextRequest) {
       clicks_whatsapp: Number(r.clicks_whatsapp),
     }));
 
+    console.log(
+      `[web-top-products] OK range=${range} count=${items.length} ms=${Date.now() - t0}`
+    );
     return NextResponse.json(
       successResponse({
         range,
@@ -149,7 +155,7 @@ export async function GET(request: NextRequest) {
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error al consultar top productos.";
-    console.error("[web-top-products GET]", msg);
+    console.error(`[web-top-products GET] FAIL msg="${msg}" ms=${Date.now() - t0}`);
     return NextResponse.json(errorResponse(msg), { status: 500 });
   }
 }
