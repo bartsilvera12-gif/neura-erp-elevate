@@ -39,6 +39,8 @@ export interface Product {
   notes: { top: string[]; heart: string[]; base: string[] };
   concentration: string;
   size: string;
+  /** SKU de inventario. Opcional para no romper mocks legacy sin SKU. */
+  sku?: string;
 }
 
 const IMG = "/brand/elevate";
@@ -128,12 +130,20 @@ export const brands = [
 export const formatPrice = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
 
-/** Número de WhatsApp (placeholder hasta Fase 4 / dato real del cliente). */
-export const WHATSAPP_NUMBER = "5491100000000";
-
-export const buildWhatsAppLink = (productName: string, price: number) => {
-  const text = encodeURIComponent(
-    `Hola Elevate ✨\nMe interesa el perfume: *${productName}*\nPrecio: ${formatPrice(price)}\n¿Podrían confirmarme disponibilidad y envío?`
-  );
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${text}`;
-};
+/**
+ * Número de WhatsApp configurado vía env var
+ * `NEXT_PUBLIC_ELEVATE_WHATSAPP_NUMBER` (client-accessible) o
+ * `ELEVATE_WHATSAPP_NUMBER` (server-only fallback). Solo dígitos, formato
+ * E.164 sin `+`. String vacío si no está configurado — los componentes que
+ * lo usan deben tratar `""` como "ocultar CTA".
+ *
+ * NOTA: Para nuevos sitios usar `getElevateWhatsappNumber()` desde
+ * `@/lib/elevate-public/whatsapp`. Este export se mantiene para no romper
+ * imports legacy (Footer, checkout).
+ */
+const RAW_WA =
+  (typeof process !== "undefined" &&
+    (process.env.NEXT_PUBLIC_ELEVATE_WHATSAPP_NUMBER?.trim() ||
+      process.env.ELEVATE_WHATSAPP_NUMBER?.trim())) ||
+  "";
+export const WHATSAPP_NUMBER = RAW_WA.replace(/\D/g, "");

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Minus, Plus, ChevronLeft, ShoppingBag } from "lucide-react";
-import { type Product, formatPrice, buildWhatsAppLink, products } from "@/lib/elevate-public/products-mock";
+import { Minus, Plus, ChevronLeft, ShoppingBag, MessageCircle } from "lucide-react";
+import { type Product, formatPrice, products } from "@/lib/elevate-public/products-mock";
+import { buildProductWhatsappLink } from "@/lib/elevate-public/whatsapp";
+import { trackProductEvent } from "@/lib/elevate-public/track";
 import { useCart } from "./CartContext";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
@@ -17,7 +19,14 @@ const statusMap = {
   soon: { label: "Próximamente", cls: "text-foreground/70 border-foreground/30" },
 } as const;
 
-export function ProductDetailClient({ product }: { product: Product }) {
+export function ProductDetailClient({
+  product,
+  whatsappNumber,
+}: {
+  product: Product;
+  /** Número WhatsApp (digits only). Si null/undefined, el botón WhatsApp se oculta. */
+  whatsappNumber?: string | null;
+}) {
   const router = useRouter();
   const { add, setOpen } = useCart();
   const [qty, setQty] = useState(1);
@@ -28,9 +37,51 @@ export function ProductDetailClient({ product }: { product: Product }) {
     .filter((p) => p.id !== product.id && p.category === product.category)
     .slice(0, 3);
 
+  // Tracking product_view en mount.
+  useEffect(() => {
+    trackProductEvent({
+      product_id: product.id,
+      event_type: "product_view",
+      source: "detalle",
+      metadata: { slug: product.slug, name: product.name },
+    });
+    // Solo al montar (o cambiar de producto).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
+
+  const productUrl = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    return `${window.location.origin}/producto/${product.slug}`;
+  }, [product.slug]);
+
+  const whatsappHref = useMemo(
+    () =>
+      buildProductWhatsappLink({
+        number: whatsappNumber ?? null,
+        productName: product.name,
+        sku: product.sku ?? null,
+        productUrl,
+      }),
+    [whatsappNumber, product.name, product.sku, productUrl]
+  );
+
   const handleAdd = () => {
     if (disabled) return;
     add(product, qty);
+    trackProductEvent({
+      product_id: product.id,
+      event_type: "add_to_cart",
+      source: "detalle",
+      metadata: { qty },
+    });
+  };
+
+  const handleWhatsappClick = () => {
+    trackProductEvent({
+      product_id: product.id,
+      event_type: "whatsapp_click",
+      source: "detalle",
+    });
   };
 
   return (
@@ -179,6 +230,12 @@ export function ProductDetailClient({ product }: { product: Product }) {
                   type="button"
                   onClick={() => {
                     add(product, qty);
+                    trackProductEvent({
+                      product_id: product.id,
+                      event_type: "add_to_cart",
+                      source: "detalle-comprar-ahora",
+                      metadata: { qty },
+                    });
                     setOpen(false);
                     router.push("/checkout");
                   }}
@@ -188,14 +245,19 @@ export function ProductDetailClient({ product }: { product: Product }) {
                 </button>
               )}
 
-              <a
-                href={buildWhatsAppLink(product.name, product.price)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 text-center py-3 text-[11px] tracking-[0.3em] uppercase text-muted-foreground hover:text-primary transition-elegant"
-              >
-                Consultar por WhatsApp
-              </a>
+              {whatsappHref ? (
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={handleWhatsappClick}
+                  aria-label={`Consultar por WhatsApp sobre ${product.name}`}
+                  className="mt-3 inline-flex items-center justify-center gap-3 py-4 text-[11px] tracking-[0.3em] uppercase bg-[#25D366] text-white hover:bg-[#1da851] transition-elegant shadow-soft"
+                >
+                  <MessageCircle size={16} />
+                  Consultar por WhatsApp
+                </a>
+              ) : null}
             </div>
           </div>
         </div>

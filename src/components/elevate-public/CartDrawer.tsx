@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { X, Minus, Plus, ShoppingBag } from "lucide-react";
+import { X, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { formatPrice } from "@/lib/elevate-public/products-mock";
 import { useCart } from "./CartContext";
 
@@ -106,8 +106,10 @@ export function CartDrawer() {
                     <button
                       type="button"
                       onClick={() => remove(i.product.id)}
-                      className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-primary mt-2"
+                      aria-label={`Quitar ${i.product.name} del carrito`}
+                      className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-red-600 mt-2 transition-colors"
                     >
+                      <Trash2 size={12} aria-hidden="true" />
                       Quitar
                     </button>
                   </div>

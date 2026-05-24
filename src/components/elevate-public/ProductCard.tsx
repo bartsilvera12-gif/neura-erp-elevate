@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { type Product, formatPrice } from "@/lib/elevate-public/products-mock";
+import { trackProductEvent } from "@/lib/elevate-public/track";
 import { useCart } from "./CartContext";
 
 const statusMap: Record<Product["status"], { label: string; cls: string }> = {
@@ -21,6 +22,14 @@ export function ProductCard({ product }: { product: Product }) {
     <article className="group relative bg-background border border-border/60 hover:border-gold/60 transition-elegant shadow-soft hover:shadow-elegant flex flex-col overflow-hidden">
       <Link
         href={`/producto/${product.slug}`}
+        onClick={() =>
+          trackProductEvent({
+            product_id: product.id,
+            event_type: "product_click",
+            source: "catalogo",
+            metadata: { slug: product.slug, name: product.name },
+          })
+        }
         className="relative aspect-[4/5] overflow-hidden bg-cream block"
         aria-label={`Ver ${product.name}`}
       >
@@ -71,7 +80,15 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="mt-auto pt-5">
           <button
             type="button"
-            onClick={() => !disabled && add(product)}
+            onClick={() => {
+              if (disabled) return;
+              add(product);
+              trackProductEvent({
+                product_id: product.id,
+                event_type: "add_to_cart",
+                source: "catalogo",
+              });
+            }}
             disabled={disabled}
             className={`w-full text-[11px] tracking-[0.3em] uppercase py-3 transition-elegant ${
               disabled

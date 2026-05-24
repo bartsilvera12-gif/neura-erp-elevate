@@ -46,6 +46,8 @@ type ApiListaProducto = {
 };
 
 export type ApiDetalleProducto = ApiListaProducto & {
+  /** SKU expuesto solo en detalle (no en listado), para usar en mensaje WhatsApp. */
+  sku?: string | null;
   descripcion_web: string | null;
   notas_top: string[];
   notas_heart: string[];
@@ -130,6 +132,7 @@ export function apiDetalleToMockProduct(api: ApiDetalleProducto): Product {
   const totalApi = apiNotas.top.length + apiNotas.heart.length + apiNotas.base.length;
   return {
     ...base,
+    sku: api.sku ?? undefined,
     description: api.descripcion_web ?? api.descripcion_corta ?? base.description,
     notes: totalApi > 0 ? apiNotas : base.notes,
   };

@@ -15,6 +15,7 @@ import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
 
 const PUBLIC_DETAIL_SELECT =
   "id," +
+  "sku," +
   "slug:slug_web," +
   "nombre," +
   "marca," +
@@ -53,6 +54,7 @@ type NotaRow = {
 
 type ProductoDetalleRaw = {
   id: string;
+  sku: string | null;
   slug: string | null;
   nombre: string | null;
   marca: string | null;
@@ -129,6 +131,7 @@ function toDetalle(r: ProductoDetalleRaw) {
 
   return {
     id: r.id,
+    sku: r.sku,
     slug: r.slug,
     nombre: r.nombre,
     marca: r.marca,

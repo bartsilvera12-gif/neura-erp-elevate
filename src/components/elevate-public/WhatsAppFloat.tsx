@@ -1,11 +1,24 @@
-import { MessageCircle } from "lucide-react";
-import { WHATSAPP_NUMBER } from "@/lib/elevate-public/products-mock";
+"use client";
 
+import { MessageCircle } from "lucide-react";
+import {
+  buildGenericWhatsappLink,
+  getElevateWhatsappNumber,
+} from "@/lib/elevate-public/whatsapp";
+
+/**
+ * Botón flotante WhatsApp (consulta genérica). Si no hay
+ * NEXT_PUBLIC_ELEVATE_WHATSAPP_NUMBER configurado, no se renderiza —
+ * preferimos invisible a un link roto.
+ */
 export function WhatsAppFloat() {
-  const text = encodeURIComponent("Hola Elevate ✨ Quisiera consultar por una fragancia.");
+  const number = getElevateWhatsappNumber();
+  const href = buildGenericWhatsappLink(number);
+  if (!href) return null;
+
   return (
     <a
-      href={`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Consultar por WhatsApp"
