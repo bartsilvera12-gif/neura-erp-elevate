@@ -33,6 +33,7 @@ import {
   toCalendarDateStr,
 } from "@/lib/fechas/calendario";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { WebTopProductsCard } from "@/components/inventario/WebTopProductsCard";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
@@ -1752,6 +1753,9 @@ function DashInventario({
           </div>
         )}
       </motion.div>
+
+      {/* Top 10 perfumes más buscados en la web (tracking perfumeriaelevate.com) */}
+      <WebTopProductsCard />
 
     </div>
   );
