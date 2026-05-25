@@ -13,9 +13,17 @@ import { postgrestGet } from "@/lib/elevate-public/catalog-postgrest";
 // (`public, s-maxage=300, stale-while-revalidate=120`). Filtros activo +
 // visible_web + slug_web previenen exposición de productos privados.
 
+// NOTA: NO incluir `sku` aquí. El rol `anon` de PostgREST tiene column-level
+// GRANT SELECT en casi todas las columnas de elevate.productos EXCEPTO `sku`
+// (decisión histórica: SKU = identificador interno). Si se pide via PostgREST
+// con `select=...,sku,...`, devuelve 403 "permission denied for table
+// familias_olfativas" (mensaje engañoso pero la causa real es el sku sin
+// grant para anon). Si más adelante se quiere exponer SKU al público hace
+// falta autorizar una migración: `GRANT SELECT (sku) ON elevate.productos
+// TO anon;`. Por ahora el WhatsApp message del botón "Consultar" usa solo
+// nombre + URL del producto cuando sku viene null/undefined.
 const PUBLIC_DETAIL_SELECT =
   "id," +
-  "sku," +
   "slug:slug_web," +
   "nombre," +
   "marca," +
@@ -54,7 +62,6 @@ type NotaRow = {
 
 type ProductoDetalleRaw = {
   id: string;
-  sku: string | null;
   slug: string | null;
   nombre: string | null;
   marca: string | null;
@@ -131,7 +138,6 @@ function toDetalle(r: ProductoDetalleRaw) {
 
   return {
     id: r.id,
-    sku: r.sku,
     slug: r.slug,
     nombre: r.nombre,
     marca: r.marca,
