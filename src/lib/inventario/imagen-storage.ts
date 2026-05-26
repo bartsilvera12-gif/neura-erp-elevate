@@ -103,3 +103,30 @@ export function pathBelongsToEmpresa(path: string | null | undefined, empresaId:
   const seg = path.split("/")[0];
   return seg === empresaId;
 }
+
+/**
+ * Valida que el path corresponde a un objeto gestionado por nosotros en el
+ * bucket `productos-imagenes`:
+ *
+ *   - NO empieza con http:// ni https:// (descarta URLs absolutas).
+ *   - NO empieza con `/` (descarta assets estáticos de Next como
+ *     `/brand/elevate/...` que pueden quedar en filas legacy/backfill).
+ *   - El primer segmento es el empresa_id (aislamiento por tenant).
+ *   - Hay al menos un segundo segmento (producto_id) y un archivo.
+ *
+ * Usar esta función ANTES de llamar a `storage.remove(...)` o de propagar
+ * un path a `productos.imagen_path`. Para los paths que no pasan, se debe
+ * borrar la fila DB pero NO tocar storage, y al mirrorear a productos se
+ * usa `null` en `imagen_path` (manteniendo `imagen_url` legacy).
+ */
+export function isManagedBucketPath(
+  path: string | null | undefined,
+  empresaId: string
+): boolean {
+  if (!path) return false;
+  if (/^https?:\/\//i.test(path)) return false;
+  if (path.startsWith("/")) return false;
+  const parts = path.split("/").filter((s) => s.length > 0);
+  if (parts.length < 3) return false; // empresa_id/producto_id/archivo (mínimo)
+  return parts[0] === empresaId;
+}

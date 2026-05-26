@@ -32,6 +32,23 @@ export function ProductDetailClient({
   const { add, setOpen } = useCart();
   const [qty, setQty] = useState(1);
 
+  // Galería (Fase Galería). Si el adapter devolvió `gallery`, la usamos; si
+  // está vacío, fallback a la imagen única `product.image`.
+  const galleryImages = useMemo(() => {
+    const list = product.gallery && product.gallery.length > 0
+      ? product.gallery
+      : product.image
+        ? [{ url: product.image, alt: null }]
+        : [];
+    return list;
+  }, [product.gallery, product.image]);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  // Reset al cambiar de producto.
+  useEffect(() => {
+    setActiveImageIdx(0);
+  }, [product.id]);
+  const activeImage = galleryImages[activeImageIdx]?.url ?? product.image;
+
   const s = statusMap[product.status];
   const disabled = product.status === "out" || product.status === "soon";
   const related = products
@@ -98,29 +115,62 @@ export function ProductDetailClient({
           </button>
 
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
-            <div className="relative bg-cream overflow-hidden shadow-elegant">
-              <div className="aspect-[4/5] relative">
-                <Image
-                  src={product.image}
-                  alt={`${product.name} de ${product.brand}`}
-                  fill
-                  sizes="(min-width:1024px) 50vw, 100vw"
-                  priority
-                  className="object-cover"
-                  // unoptimized: imagen pública del bucket Storage. Evita
-                  // /_next/image y libera CPU del Node de Hostinger.
-                  unoptimized
-                />
+            <div className="space-y-3">
+              <div className="relative bg-cream overflow-hidden shadow-elegant">
+                <div className="aspect-[4/5] relative">
+                  <Image
+                    src={activeImage}
+                    alt={
+                      galleryImages[activeImageIdx]?.alt ??
+                      `${product.name} de ${product.brand}`
+                    }
+                    fill
+                    sizes="(min-width:1024px) 50vw, 100vw"
+                    priority
+                    className="object-cover"
+                    // unoptimized: imagen pública del bucket Storage. Evita
+                    // /_next/image y libera CPU del Node de Hostinger.
+                    unoptimized
+                  />
+                </div>
+                {product.promo && (
+                  <span className="absolute top-6 left-6 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
+                    {product.promo}
+                  </span>
+                )}
+                {product.isNew && !product.promo && (
+                  <span className="absolute top-6 left-6 bg-gold text-gold-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
+                    Nuevo
+                  </span>
+                )}
               </div>
-              {product.promo && (
-                <span className="absolute top-6 left-6 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
-                  {product.promo}
-                </span>
-              )}
-              {product.isNew && !product.promo && (
-                <span className="absolute top-6 left-6 bg-gold text-gold-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
-                  Nuevo
-                </span>
+
+              {/* Thumbnails (Fase Galería). Solo aparecen si hay >1 imagen. */}
+              {galleryImages.length > 1 && (
+                <div className="grid grid-cols-5 gap-2">
+                  {galleryImages.map((img, idx) => (
+                    <button
+                      key={`${img.url}-${idx}`}
+                      type="button"
+                      onClick={() => setActiveImageIdx(idx)}
+                      aria-label={`Ver imagen ${idx + 1}`}
+                      aria-pressed={idx === activeImageIdx}
+                      className={`relative aspect-square overflow-hidden border transition-elegant ${
+                        idx === activeImageIdx
+                          ? "border-gold ring-1 ring-gold"
+                          : "border-border hover:border-gold/60"
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.url}
+                        alt={img.alt ?? `${product.name} ${idx + 1}`}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading={idx === 0 ? "eager" : "lazy"}
+                      />
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 

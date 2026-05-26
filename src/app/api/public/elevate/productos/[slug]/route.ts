@@ -46,6 +46,7 @@ const PUBLIC_DETAIL_SELECT =
   "familia:familias_olfativas(nombre,descripcion)," +
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)," +
+  "imagenes:producto_imagenes(id,imagen_url,imagen_path,orden,es_principal,alt_text)," +
   "notas:producto_notas(posicion,orden,nota:notas_olfativas(nombre))";
 
 type FamiliaRef = { nombre: string | null; descripcion: string | null } | null;
@@ -66,6 +67,14 @@ type NotaRow = {
   posicion: "top" | "heart" | "base";
   orden: number | null;
   nota: { nombre: string | null } | null;
+};
+type ImagenRow = {
+  id: string;
+  imagen_url: string | null;
+  imagen_path: string | null;
+  orden: number | null;
+  es_principal: boolean | null;
+  alt_text: string | null;
 };
 
 type ProductoDetalleRaw = {
@@ -92,6 +101,7 @@ type ProductoDetalleRaw = {
   familia: FamiliaRef;
   categoria: CategoriaRef;
   marca_ref: MarcaRef;
+  imagenes: ImagenRow[] | null;
   notas: NotaRow[] | null;
 };
 
@@ -186,6 +196,41 @@ function toDetalle(r: ProductoDetalleRaw) {
       r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
         ? r.marca_ref.slug_web ?? null
         : null,
+    // Galería ordenada con la principal primero (fallback al imagen_url
+     // legacy cuando todavía no hay backfill). Solo URL pública + alt_text.
+    imagenes: (() => {
+      const rows = Array.isArray(r.imagenes) ? r.imagenes : [];
+      if (rows.length === 0) {
+        // Fallback legacy: si no hay galería, devolvemos un único elemento
+        // con la imagen_url del producto si existe — esto permite que la
+        // web pública no tenga que ramificar.
+        return r.imagen_url
+          ? [
+              {
+                id: "legacy",
+                url: r.imagen_url,
+                orden: 0,
+                es_principal: true,
+                alt_text: null,
+              },
+            ]
+          : [];
+      }
+      return rows
+        .filter((x) => x && x.imagen_url)
+        .sort((a, b) => {
+          if (a.es_principal && !b.es_principal) return -1;
+          if (!a.es_principal && b.es_principal) return 1;
+          return (a.orden ?? 999) - (b.orden ?? 999);
+        })
+        .map((x) => ({
+          id: x.id,
+          url: x.imagen_url as string,
+          orden: x.orden ?? 0,
+          es_principal: x.es_principal === true,
+          alt_text: x.alt_text,
+        }));
+    })(),
     notas_top: pickNotas(r.notas, "top"),
     notas_heart: pickNotas(r.notas, "heart"),
     notas_base: pickNotas(r.notas, "base"),

@@ -43,6 +43,9 @@ export interface Product {
   sku?: string;
   /** Slug de la marca formal (Fase Marcas). Permite navegar Categoría → Marca → Productos. */
   marca_slug?: string | null;
+  /** Galería de imágenes (Fase Galería). Ordenadas con principal primero.
+   *  Si está vacío, la web usa `image` legacy. */
+  gallery?: { url: string; alt: string | null }[];
 }
 
 const IMG = "/brand/elevate";

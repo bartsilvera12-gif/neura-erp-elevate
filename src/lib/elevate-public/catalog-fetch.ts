@@ -56,6 +56,15 @@ export type ApiDetalleProducto = ApiListaProducto & {
   notas_top: string[];
   notas_heart: string[];
   notas_base: string[];
+  /** Galería ordenada (Fase Galería). Si no hay filas, el server devuelve un
+   *  fallback con la imagen legacy. */
+  imagenes?: {
+    id: string;
+    url: string;
+    orden: number;
+    es_principal: boolean;
+    alt_text: string | null;
+  }[];
 };
 
 function defaultCategoryFor(brand: string | null): ProductCategory {
@@ -137,11 +146,17 @@ export function apiDetalleToMockProduct(api: ApiDetalleProducto): Product {
     base: api.notas_base ?? [],
   };
   const totalApi = apiNotas.top.length + apiNotas.heart.length + apiNotas.base.length;
+  const gallery = Array.isArray(api.imagenes)
+    ? api.imagenes
+        .filter((x) => x && x.url)
+        .map((x) => ({ url: x.url, alt: x.alt_text }))
+    : [];
   return {
     ...base,
     sku: api.sku ?? undefined,
     description: api.descripcion_web ?? api.descripcion_corta ?? base.description,
     notes: totalApi > 0 ? apiNotas : base.notes,
+    gallery,
   };
 }
 

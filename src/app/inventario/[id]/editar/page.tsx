@@ -6,7 +6,7 @@ import { useRouter, useParams } from "next/navigation";
 import MontoInput from "@/components/ui/MontoInput";
 import { getProducto, productoExiste, updateProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
-import ProductImageUploader from "@/components/inventario/ProductImageUploader";
+import { ProductGaleria } from "@/components/inventario/ProductGaleria";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import { UNIDADES_MEDIDA, isUnidadMedidaCanonica, normalizeUnidadMedida } from "@/lib/inventario/unidades-medida";
 import {
@@ -505,14 +505,15 @@ export default function EditarProductoPage() {
             )}
           </div>
 
-          {/* Imagen del producto */}
+          {/* Galería del producto — hasta 5 imágenes (Fase Galería). El
+              componente sincroniza la principal con productos.imagen_url
+              server-side, así que el catálogo público sigue funcionando. */}
           <div>
-            <label className={labelClass}>Imagen del producto</label>
-            <ProductImageUploader
+            <label className={labelClass}>Galería del producto</label>
+            <ProductGaleria
               productoId={id}
-              initialUrl={imagenUrl}
-              initialPath={imagenPath}
-              onChange={(info) => {
+              fallbackUrl={imagenUrl}
+              onPrincipalChange={(info) => {
                 setImagenPath(info.imagen_path);
                 setImagenUrl(info.imagen_url);
               }}
