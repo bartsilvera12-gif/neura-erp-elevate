@@ -41,6 +41,7 @@ export function Footer() {
               <li><Link href="/marcas" className="hover:text-gold-light transition-smooth">Marcas</Link></li>
               <li><Link href="/nosotros" className="hover:text-gold-light transition-smooth">Quiénes somos</Link></li>
               <li><Link href="/faq" className="hover:text-gold-light transition-smooth">FAQ y Políticas</Link></li>
+              <li><Link href="/politica-envios" className="hover:text-gold-light transition-smooth">Política de envíos</Link></li>
             </ul>
           </div>
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SectionTitle } from "./SectionTitle";
 
 const policies = [
@@ -9,15 +10,17 @@ const policies = [
       "El reintegro se realiza por el mismo medio de pago original.",
       "El costo de envío de devolución corre por cuenta del cliente, salvo defecto comprobado.",
     ],
+    link: null as { href: string; label: string } | null,
   },
   {
     title: "Política de Envío",
     items: [
-      "Envíos a todo el país mediante operadores logísticos premium.",
-      "Tiempos: CABA y GBA 24-48 hs · Interior 3-7 días hábiles.",
-      "Envío express disponible con costo adicional.",
-      "Seguimiento personalizado por WhatsApp en cada etapa.",
+      "Pedidos confirmados de 07:00 a 14:30 hs se preparan para envío el mismo día.",
+      "Paraguay 🇵🇾: envíos por transportadora dentro del horario indicado.",
+      "Argentina 🇦🇷 y Brasil 🇧🇷: coordinar el envío con el vendedor antes de confirmar la compra.",
+      "No se realizan despachos los domingos ni feriados.",
     ],
+    link: { href: "/politica-envios", label: "Ver política de envíos completa" },
   },
 ];
 
@@ -30,11 +33,11 @@ export function Policies() {
           {policies.map((p) => (
             <div
               key={p.title}
-              className="border border-border p-8 lg:p-10 bg-cream/30 hover:border-gold transition-elegant"
+              className="border border-border p-8 lg:p-10 bg-cream/30 hover:border-gold transition-elegant flex flex-col"
             >
               <h3 className="font-display text-2xl text-primary">{p.title}</h3>
               <div className="gold-divider w-12 my-5" />
-              <ul className="space-y-3">
+              <ul className="space-y-3 flex-1">
                 {p.items.map((it, i) => (
                   <li key={i} className="flex gap-3 text-foreground/80 text-sm leading-relaxed">
                     <span className="text-gold mt-1">◆</span>
@@ -42,6 +45,14 @@ export function Policies() {
                   </li>
                 ))}
               </ul>
+              {p.link && (
+                <Link
+                  href={p.link.href}
+                  className="mt-6 inline-block text-xs tracking-[0.3em] uppercase text-gold hover:text-primary transition-smooth"
+                >
+                  {p.link.label} →
+                </Link>
+              )}
             </div>
           ))}
         </div>
