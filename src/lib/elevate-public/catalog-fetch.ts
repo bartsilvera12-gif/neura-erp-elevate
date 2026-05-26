@@ -42,6 +42,10 @@ type ApiListaProducto = {
    *  producto aún no tiene categoria_principal_id asignada. */
   categoria_nombre?: string | null;
   categoria_slug?: string | null;
+  /** Marca formal (Fase Marcas). */
+  marca_id?: string | null;
+  marca_nombre?: string | null;
+  marca_slug?: string | null;
   orden_web: number | null;
 };
 
@@ -100,7 +104,10 @@ export function apiToMockProduct(api: ApiListaProducto): Product {
     id: api.id,
     slug: api.slug ?? "",
     name: api.nombre ?? "",
-    brand: api.marca ?? "",
+    // Si llega marca formal (Fase Marcas), preferirla — su nombre está
+    // saneado por el ERP. Fallback a marca text legacy.
+    brand: api.marca_nombre ?? api.marca ?? "",
+    marca_slug: api.marca_slug ?? null,
     category,
     type: api.familia_olfativa ?? fromMock?.type ?? "",
     price: api.precio,
@@ -175,6 +182,9 @@ export async function fetchCatalog(params?: {
   nuevos?: boolean;
   promos?: boolean;
   limit?: number;
+  /** Filtros Fase Marcas: navegación Categoría → Marca → Productos. */
+  categoria?: string | null;
+  marca?: string | null;
 }): Promise<CatalogFetchResult> {
   try {
     const origin = await getOrigin();
@@ -182,6 +192,8 @@ export async function fetchCatalog(params?: {
     if (params?.destacado) qs.set("destacado", "true");
     if (params?.nuevos) qs.set("nuevos", "true");
     if (params?.promos) qs.set("promos", "true");
+    if (params?.categoria) qs.set("categoria", params.categoria);
+    if (params?.marca) qs.set("marca", params.marca);
     const r = await fetchWithTimeout(`${origin}/api/public/elevate/productos?${qs.toString()}`, {
       next: { revalidate: 60 },
     });
@@ -245,6 +257,38 @@ export type CategoriaWeb = {
   descripcion: string | null;
   orden: number | null;
 };
+
+// ─── Marcas web (Fase Marcas) ─────────────────────────────────────────────
+
+export type MarcaWeb = {
+  id: string;
+  nombre: string;
+  slug: string | null;
+  descripcion: string | null;
+  logo_url: string | null;
+  orden: number | null;
+};
+
+/**
+ * Marcas visibles. Si se pasa `categoriaSlug`, devuelve solo marcas que
+ * tienen al menos un producto visible dentro de esa categoría.
+ */
+export async function fetchMarcasPublic(
+  categoriaSlug?: string | null
+): Promise<MarcaWeb[]> {
+  try {
+    const origin = await getOrigin();
+    const qs = new URLSearchParams();
+    if (categoriaSlug) qs.set("categoria", categoriaSlug);
+    const url = `${origin}/api/public/elevate/marcas${qs.toString() ? "?" + qs.toString() : ""}`;
+    const r = await fetchWithTimeout(url, { next: { revalidate: 60 } });
+    if (!r.ok) return [];
+    const data = (await r.json()) as { marcas?: MarcaWeb[] };
+    return Array.isArray(data.marcas) ? data.marcas : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Listado de categorías visibles del catálogo público. API primaria; si falla,

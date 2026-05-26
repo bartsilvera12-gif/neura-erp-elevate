@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { ProductCard } from "@/components/elevate-public/ProductCard";
 import { SectionTitle } from "@/components/elevate-public/SectionTitle";
 import type { Product } from "@/lib/elevate-public/products-mock";
-import type { CategoriaWeb } from "@/lib/elevate-public/catalog-fetch";
+import type { CategoriaWeb, MarcaWeb } from "@/lib/elevate-public/catalog-fetch";
 
 const FILTERS = ["Todos", "Más vendidos", "Promociones", "Nuevos", "En stock"] as const;
 
@@ -17,9 +18,11 @@ type CategoryTab = "Todos" | string;
 export function CatalogClient({
   products,
   categorias,
+  marcas,
 }: {
   products: Product[];
   categorias: CategoriaWeb[];
+  marcas: MarcaWeb[];
 }) {
   // "Todos" siempre presente. El resto sale de DB con orden_web.
   const categoryTabs: CategoryTab[] = [
@@ -27,14 +30,56 @@ export function CatalogClient({
     ...categorias.map((c) => c.nombre),
   ];
 
-  const [cat, setCat] = useState<CategoryTab>("Todos");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Estado inicial desde la URL (?categoria=&marca=) para que el link
+  // "Diseñador → Giorgio Armani" sea compartible.
+  const initialCatSlug = searchParams.get("categoria")?.trim().toLowerCase() || null;
+  const initialMarcaSlug = searchParams.get("marca")?.trim().toLowerCase() || null;
+  const initialCatName =
+    (initialCatSlug && categorias.find((c) => c.slug === initialCatSlug)?.nombre) || "Todos";
+
+  const [cat, setCat] = useState<CategoryTab>(initialCatName);
+  const [marcaSlug, setMarcaSlug] = useState<string | null>(initialMarcaSlug);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("Todos");
   const [query, setQuery] = useState("");
+
+  // Mantiene la URL sincronizada (replace, sin agregar entrada al history).
+  useEffect(() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    const catObj = categorias.find((c) => c.nombre === cat);
+    if (catObj?.slug) sp.set("categoria", catObj.slug);
+    else sp.delete("categoria");
+    if (marcaSlug) sp.set("marca", marcaSlug);
+    else sp.delete("marca");
+    const qs = sp.toString();
+    router.replace(qs ? `/catalogo?${qs}` : "/catalogo", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cat, marcaSlug]);
+
+  // Marcas a mostrar como chips. Si hay categoría seleccionada, restringimos
+  // a las marcas que tienen al menos un producto en esa categoría.
+  const marcasDisponibles: MarcaWeb[] = useMemo(() => {
+    if (cat === "Todos") return marcas;
+    const slugsConProducto = new Set<string>();
+    for (const p of products) {
+      if (p.category === cat && p.marca_slug) slugsConProducto.add(p.marca_slug);
+    }
+    return marcas.filter((m) => m.slug && slugsConProducto.has(m.slug));
+  }, [marcas, products, cat]);
+
+  // Si el usuario cambia de categoría y la marca activa ya no aplica, se limpia.
+  useEffect(() => {
+    if (!marcaSlug) return;
+    if (!marcasDisponibles.some((m) => m.slug === marcaSlug)) setMarcaSlug(null);
+  }, [marcasDisponibles, marcaSlug]);
 
   const list = useMemo(() => {
     const q = norm(query.trim());
     return products.filter((p) => {
       if (cat !== "Todos" && p.category !== cat) return false;
+      if (marcaSlug && p.marca_slug !== marcaSlug) return false;
       if (filter === "Más vendidos" && !p.bestseller) return false;
       if (filter === "Promociones" && !p.oldPrice) return false;
       if (filter === "Nuevos" && !p.isNew) return false;
@@ -50,7 +95,7 @@ export function CatalogClient({
       }
       return true;
     });
-  }, [cat, filter, query, products]);
+  }, [cat, marcaSlug, filter, query, products]);
 
   const suggestions = useMemo(() => {
     if (!query || list.length > 0) return [];
@@ -102,7 +147,10 @@ export function CatalogClient({
               <button
                 key={c}
                 type="button"
-                onClick={() => setCat(c)}
+                onClick={() => {
+                  setCat(c);
+                  setMarcaSlug(null);
+                }}
                 className={`px-5 py-2.5 text-[11px] tracking-[0.25em] uppercase border transition-elegant ${
                   cat === c
                     ? "bg-primary text-primary-foreground border-primary"
@@ -113,6 +161,38 @@ export function CatalogClient({
               </button>
             ))}
           </div>
+
+          {/* Chips de marcas (Fase Marcas): visibles cuando hay categoría
+              elegida y al menos una marca disponible para esa categoría. */}
+          {marcasDisponibles.length > 0 && (
+            <div className="mt-4 flex flex-wrap justify-center gap-2 md:gap-3">
+              <button
+                type="button"
+                onClick={() => setMarcaSlug(null)}
+                className={`px-4 py-1.5 text-[10px] tracking-[0.25em] uppercase border transition-smooth ${
+                  marcaSlug === null
+                    ? "bg-gold/15 border-gold text-primary"
+                    : "border-border text-muted-foreground hover:border-gold hover:text-primary"
+                }`}
+              >
+                Todas las marcas
+              </button>
+              {marcasDisponibles.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMarcaSlug(m.slug)}
+                  className={`px-4 py-1.5 text-[10px] tracking-[0.25em] uppercase border transition-smooth ${
+                    marcaSlug === m.slug
+                      ? "bg-gold/15 border-gold text-primary"
+                      : "border-border text-muted-foreground hover:border-gold hover:text-primary"
+                  }`}
+                >
+                  {m.nombre}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="mt-4 flex flex-wrap justify-center gap-2 md:gap-3">
             {FILTERS.map((f) => (

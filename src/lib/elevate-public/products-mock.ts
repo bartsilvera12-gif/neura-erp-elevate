@@ -41,6 +41,8 @@ export interface Product {
   size: string;
   /** SKU de inventario. Opcional para no romper mocks legacy sin SKU. */
   sku?: string;
+  /** Slug de la marca formal (Fase Marcas). Permite navegar Categoría → Marca → Productos. */
+  marca_slug?: string | null;
 }
 
 const IMG = "/brand/elevate";

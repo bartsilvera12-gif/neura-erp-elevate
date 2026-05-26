@@ -56,10 +56,18 @@ const PUBLIC_SELECT =
   "genero," +
   "orden_web," +
   "familia:familias_olfativas(nombre)," +
-  "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)";
+  "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
+  "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)";
 
 type FamiliaRef = { nombre: string | null } | null;
 type CategoriaRef = {
+  nombre: string | null;
+  slug_web: string | null;
+  visible_web: boolean | null;
+  activo: boolean | null;
+} | null;
+type MarcaRef = {
+  id: string | null;
   nombre: string | null;
   slug_web: string | null;
   visible_web: boolean | null;
@@ -88,6 +96,7 @@ type ProductoRaw = {
   orden_web: number | null;
   familia: FamiliaRef;
   categoria: CategoriaRef;
+  marca_ref: MarcaRef;
 };
 
 export type ProductoPublico = {
@@ -112,6 +121,9 @@ export type ProductoPublico = {
   familia_olfativa: string | null;
   categoria_nombre: string | null;
   categoria_slug: string | null;
+  marca_id: string | null;
+  marca_nombre: string | null;
+  marca_slug: string | null;
   orden_web: number | null;
 };
 
@@ -188,6 +200,20 @@ export function toPublico(r: ProductoRaw): ProductoPublico {
       r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
         ? r.categoria.slug_web ?? null
         : null,
+    // Marca formal (Fase Marcas). Si la marca está oculta o inactiva, no la
+    // exponemos en el catálogo público (igual que con categoría).
+    marca_id:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.id ?? null
+        : null,
+    marca_nombre:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.nombre ?? r.marca ?? null
+        : r.marca ?? null,
+    marca_slug:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.slug_web ?? null
+        : null,
     orden_web: r.orden_web,
   };
 }
@@ -207,9 +233,27 @@ export async function GET(request: NextRequest) {
     const destacadoOnly = url.searchParams.get("destacado") === "true";
     const nuevosOnly = url.searchParams.get("nuevos") === "true";
     const promosOnly = url.searchParams.get("promos") === "true";
+    // Filtros de catálogo Fase Marcas. Se aceptan slug (preferido) o id.
+    const marcaSlug = url.searchParams.get("marca")?.trim().toLowerCase() || null;
+    const categoriaSlug = url.searchParams.get("categoria")?.trim().toLowerCase() || null;
+
+    // Para filtrar productos por slug de marca/categoría usamos `!inner` en el
+    // embed correspondiente: convierte el LEFT JOIN en INNER JOIN y permite
+    // que el filtro `tablename.col=eq.X` aplique al rowset principal.
+    const select = PUBLIC_SELECT
+      .replace(
+        "marca_ref:marca_id(",
+        marcaSlug ? "marca_ref:marca_id!inner(" : "marca_ref:marca_id("
+      )
+      .replace(
+        "categoria:categoria_principal_id(",
+        categoriaSlug
+          ? "categoria:categoria_principal_id!inner("
+          : "categoria:categoria_principal_id("
+      );
 
     const qs = new URLSearchParams({
-      select: PUBLIC_SELECT,
+      select,
       activo: "eq.true",
       visible_web: "eq.true",
       order: "orden_web.asc.nullslast,destacado_web.desc,nombre.asc",
@@ -219,6 +263,8 @@ export async function GET(request: NextRequest) {
     if (destacadoOnly) qs.set("destacado_web", "eq.true");
     if (nuevosOnly) qs.set("nuevo_hasta", `gte.${new Date().toISOString().slice(0, 10)}`);
     if (promosOnly) qs.set("precio_oferta", "not.is.null");
+    if (marcaSlug) qs.append("marca_ref.slug_web", `eq.${marcaSlug}`);
+    if (categoriaSlug) qs.append("categoria.slug_web", `eq.${categoriaSlug}`);
 
     const result = await postgrestGet<ProductoRaw>("productos", qs.toString());
     if (!result.ok) {

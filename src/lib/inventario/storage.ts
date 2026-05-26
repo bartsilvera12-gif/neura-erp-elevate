@@ -38,6 +38,7 @@ interface ProductoRow {
   descripcion_corta?: string | null;
   descripcion_web?: string | null;
   marca?: string | null;
+  marca_id?: string | null;
   precio_web?: number | null;
   /* Catálogo enriquecido (Fase 1 catálogo) — el endpoint singular los devuelve
    * desde el fix 519d10f; faltaba que el mapper los pasara al form. */
@@ -102,6 +103,7 @@ function rowToProducto(row: ProductoRow): Producto {
     descripcion_corta: row.descripcion_corta ?? null,
     descripcion_web: row.descripcion_web ?? null,
     marca: row.marca ?? null,
+    marca_id: row.marca_id ?? null,
     precio_web: row.precio_web == null ? null : Number(row.precio_web),
     // Fix: estos campos venían del backend pero el mapper los descartaba,
     // dejando el form de edición vacío aunque la DB y el endpoint los traían.
@@ -235,6 +237,7 @@ export async function saveProducto(
     descripcion_corta: datos.descripcion_corta ?? null,
     descripcion_web: datos.descripcion_web ?? null,
     marca: datos.marca ?? null,
+    marca_id: datos.marca_id ?? null,
     precio_web: datos.precio_web ?? null,
     precio_oferta: datos.precio_oferta ?? null,
     oferta_hasta: datos.oferta_hasta ?? null,
@@ -301,6 +304,7 @@ export async function updateProducto(
   if (datos.descripcion_corta !== undefined) body.descripcion_corta = datos.descripcion_corta ?? null;
   if (datos.descripcion_web !== undefined) body.descripcion_web = datos.descripcion_web ?? null;
   if (datos.marca !== undefined) body.marca = datos.marca ?? null;
+  if (datos.marca_id !== undefined) body.marca_id = datos.marca_id ?? null;
   if (datos.precio_web !== undefined) body.precio_web = datos.precio_web ?? null;
   // Catálogo enriquecido
   if (datos.precio_oferta !== undefined) body.precio_oferta = datos.precio_oferta ?? null;

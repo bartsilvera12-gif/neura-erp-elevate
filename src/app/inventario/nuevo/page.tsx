@@ -20,6 +20,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
 interface ProvRow { id: string; nombre: string }
+interface MarcaRow { id: string; nombre: string }
 
 export default function NuevoProductoPage() {
   const router = useRouter();
@@ -52,26 +53,29 @@ export default function NuevoProductoPage() {
   const [categorias, setCategorias] = useState<CatRow[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbiRow[]>([]);
   const [proveedores, setProveedores] = useState<ProvRow[]>([]);
+  const [marcas, setMarcas] = useState<MarcaRow[]>([]);
 
   useEffect(() => {
     let cancel = false;
     async function load(url: string) {
       try {
-        const r = await fetch(url, { credentials: "include" });
+        const r = await fetchWithSupabaseSession(url, { cache: "no-store" });
         const j = await r.json();
         return r.ok && j?.success ? j.data : null;
       } catch { return null; }
     }
     (async () => {
-      const [cats, ubis, provs] = await Promise.all([
+      const [cats, ubis, provs, mks] = await Promise.all([
         load("/api/inventario/categorias"),
         load("/api/inventario/ubicaciones"),
         load("/api/proveedores"),
+        load("/api/inventario/marcas"),
       ]);
       if (cancel) return;
       if (cats?.categorias) setCategorias(cats.categorias as CatRow[]);
       if (ubis?.ubicaciones) setUbicaciones(ubis.ubicaciones as UbiRow[]);
       if (provs?.proveedores) setProveedores(provs.proveedores as ProvRow[]);
+      if (mks?.marcas) setMarcas(mks.marcas as MarcaRow[]);
     })();
     return () => { cancel = true; };
   }, []);
@@ -222,6 +226,7 @@ export default function NuevoProductoPage() {
           descripcion_corta: cw.descripcion_corta,
           descripcion_web: cw.descripcion_web,
           marca: cw.marca,
+          marca_id: cw.marca_id,
           precio_web: cw.precio_web,
           precio_oferta: cw.precio_oferta,
           oferta_hasta: cw.oferta_hasta,
@@ -690,6 +695,7 @@ export default function NuevoProductoPage() {
             onChange={setCatWeb}
             nombre={form.nombre}
             precioVenta={form.precio_venta}
+            marcas={marcas}
           />
 
           {/* Acciones */}

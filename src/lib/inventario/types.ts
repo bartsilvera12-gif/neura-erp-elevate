@@ -36,6 +36,8 @@ export interface Producto {
   descripcion_corta?: string | null;
   descripcion_web?: string | null;
   marca?: string | null;
+  /** FK opcional a elevate.marcas. Coexiste con marca text legacy. */
+  marca_id?: string | null;
   precio_web?: number | null;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;

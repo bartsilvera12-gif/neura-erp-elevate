@@ -20,7 +20,7 @@ const PRODUCTO_COLS_PRIV =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
   // Fix: estas columnas faltaban y causaban que el editor reabriera el producto
   // con los campos del catálogo web / promo vacíos aunque estuvieran guardados
   // en DB (el PATCH sí los persistía; solo el GET no los traía de vuelta).
@@ -188,6 +188,13 @@ export async function PATCH(
     }
     if (body.marca !== undefined) {
       patch.marca = typeof body.marca === "string" ? body.marca.trim() || null : null;
+    }
+    if (body.marca_id !== undefined) {
+      const v = body.marca_id == null ? null : String(body.marca_id);
+      if (v && !(await existsInTenantPostgrest(jwt, empresaId, "marcas", v))) {
+        return NextResponse.json(errorResponse("La marca seleccionada no existe."), { status: 400 });
+      }
+      patch.marca_id = v;
     }
     if (body.precio_web !== undefined) {
       const v = body.precio_web;

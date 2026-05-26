@@ -26,7 +26,7 @@ const RETURNING_COLS =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
   "proximamente,orden_web,familia_olfativa_id";
 
@@ -44,7 +44,7 @@ function classify23505(err: { code?: string; message?: string; detail?: string }
 export async function existsInTenantPostgrest(
   jwt: string | null,
   empresaId: string,
-  table: "categorias_productos" | "inventario_ubicaciones" | "proveedores",
+  table: "categorias_productos" | "inventario_ubicaciones" | "proveedores" | "marcas",
   id: string
 ): Promise<boolean> {
   const qs = new URLSearchParams({
@@ -107,6 +107,7 @@ export async function insertProductoPostgrest(
     descripcion_corta: d.descripcion_corta ?? null,
     descripcion_web: d.descripcion_web ?? null,
     marca: d.marca ?? null,
+    marca_id: d.marca_id ?? null,
     precio_web: d.precio_web ?? null,
     precio_oferta: d.precio_oferta ?? null,
     oferta_hasta: d.oferta_hasta ?? null,
@@ -147,7 +148,7 @@ export async function updateProductoPostgrest(
     "imagen_path", "imagen_url",
     "categoria_principal_id", "ubicacion_principal_id", "proveedor_principal_id",
     "slug_web", "visible_web", "destacado_web", "descripcion_corta", "descripcion_web",
-    "marca", "precio_web",
+    "marca", "marca_id", "precio_web",
     "precio_oferta", "oferta_hasta", "nuevo_hasta", "concentracion", "volumen_ml",
     "genero", "proximamente", "orden_web", "familia_olfativa_id",
   ];

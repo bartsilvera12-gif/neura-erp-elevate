@@ -87,6 +87,7 @@ export interface ProductoRow {
   descripcion_corta: string | null;
   descripcion_web: string | null;
   marca: string | null;
+  marca_id: string | null;
   precio_web: string | number | null;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta: string | number | null;
@@ -121,6 +122,7 @@ export interface InsertProductoInput {
   descripcion_corta?: string | null;
   descripcion_web?: string | null;
   marca?: string | null;
+  marca_id?: string | null;
   precio_web?: number | null;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;
@@ -139,7 +141,7 @@ const RETURNING = `
   unidad_medida, metodo_valuacion, activo, created_at, updated_at,
   codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
   categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
-  slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web,
+  slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, marca_id, precio_web,
   precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
   proximamente, orden_web, familia_olfativa_id
 `;
@@ -158,16 +160,16 @@ export async function insertProducto(
       empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
       unidad_medida, metodo_valuacion, codigo_barras, codigo_barras_interno,
       categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
-      slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, precio_web,
+      slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, marca_id, precio_web,
       precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
       proximamente, orden_web, familia_olfativa_id
     ) VALUES (
       $1::uuid, $2, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric,
       $8, $9, $10, COALESCE($11::boolean, false),
       $12::uuid, $13::uuid, $14::uuid,
-      $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::numeric,
-      $22::numeric, $23::timestamptz, $24::date, $25, $26::int, $27,
-      COALESCE($28::boolean, false), $29::int, $30::uuid
+      $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::uuid, $22::numeric,
+      $23::numeric, $24::timestamptz, $25::date, $26, $27::int, $28,
+      COALESCE($29::boolean, false), $30::int, $31::uuid
     )
     RETURNING ${RETURNING}
   `;
@@ -192,6 +194,7 @@ export async function insertProducto(
     d.descripcion_corta ?? null,
     d.descripcion_web ?? null,
     d.marca ?? null,
+    d.marca_id ?? null,
     d.precio_web ?? null,
     d.precio_oferta ?? null,
     d.oferta_hasta ?? null,
@@ -234,6 +237,7 @@ export interface UpdateProductoInput {
   descripcion_corta?: string | null;
   descripcion_web?: string | null;
   marca?: string | null;
+  marca_id?: string | null;
   precio_web?: number | null;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;
@@ -294,6 +298,7 @@ export async function updateProductoPg(
   if (patch.descripcion_corta !== undefined) add("descripcion_corta", patch.descripcion_corta || null);
   if (patch.descripcion_web !== undefined) add("descripcion_web", patch.descripcion_web || null);
   if (patch.marca !== undefined) add("marca", patch.marca || null);
+  if (patch.marca_id !== undefined) add("marca_id", patch.marca_id || null, "::uuid");
   if (patch.precio_web !== undefined) add("precio_web", patch.precio_web == null ? null : patch.precio_web, "::numeric");
   // Catálogo enriquecido
   if (patch.precio_oferta !== undefined) add("precio_oferta", patch.precio_oferta == null ? null : patch.precio_oferta, "::numeric");
@@ -510,6 +515,7 @@ export function rowToProductoApi(r: ProductoRow): Record<string, unknown> {
     descripcion_corta: r.descripcion_corta ?? null,
     descripcion_web: r.descripcion_web ?? null,
     marca: r.marca ?? null,
+    marca_id: r.marca_id ?? null,
     precio_web: r.precio_web == null ? null : Number(r.precio_web),
     precio_oferta: r.precio_oferta == null ? null : Number(r.precio_oferta),
     oferta_hasta: r.oferta_hasta ?? null,

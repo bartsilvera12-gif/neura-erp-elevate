@@ -22,7 +22,7 @@ const PRODUCTOS_COLS_PRIV =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
   "proximamente,orden_web,familia_olfativa_id";
 
@@ -129,6 +129,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse("El proveedor seleccionado no existe."), { status: 400 });
     }
 
+    // marca_id opcional (Fase Marcas): si vino, validar ownership.
+    const marcaId = body.marca_id ? String(body.marca_id) : null;
+    if (marcaId && !(await existsInTenantPostgrest(jwt, empresaId, "marcas", marcaId))) {
+      return NextResponse.json(errorResponse("La marca seleccionada no existe."), { status: 400 });
+    }
+
     // Campos web pública (Fase 1) — opt-in; defaults false/null.
     const slugWeb = typeof body.slug_web === "string" ? body.slug_web.trim().toLowerCase() || null : null;
     const visibleWeb = body.visible_web === true;
@@ -182,6 +188,7 @@ export async function POST(request: NextRequest) {
         descripcion_corta: descripcionCorta,
         descripcion_web: descripcionWeb,
         marca,
+        marca_id: marcaId,
         precio_web: precioWeb,
         precio_oferta: precioOferta,
         oferta_hasta: ofertaHasta,

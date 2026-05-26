@@ -76,26 +76,29 @@ export default function EditarProductoPage() {
   const [categorias, setCategorias] = useState<CatRow[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbiRow[]>([]);
   const [proveedores, setProveedores] = useState<ProvRow[]>([]);
+  const [marcas, setMarcas] = useState<{ id: string; nombre: string }[]>([]);
 
   useEffect(() => {
     let cancel = false;
     async function load(url: string) {
       try {
-        const r = await fetch(url, { credentials: "include" });
+        const r = await fetchWithSupabaseSession(url, { cache: "no-store" });
         const j = await r.json();
         return r.ok && j?.success ? j.data : null;
       } catch { return null; }
     }
     (async () => {
-      const [cats, ubis, provs] = await Promise.all([
+      const [cats, ubis, provs, mks] = await Promise.all([
         load("/api/inventario/categorias"),
         load("/api/inventario/ubicaciones"),
         load("/api/proveedores"),
+        load("/api/inventario/marcas"),
       ]);
       if (cancel) return;
       if (cats?.categorias) setCategorias(cats.categorias as CatRow[]);
       if (ubis?.ubicaciones) setUbicaciones(ubis.ubicaciones as UbiRow[]);
       if (provs?.proveedores) setProveedores(provs.proveedores as ProvRow[]);
+      if (mks?.marcas) setMarcas(mks.marcas as { id: string; nombre: string }[]);
     })();
     return () => { cancel = true; };
   }, []);
@@ -163,6 +166,7 @@ export default function EditarProductoPage() {
         destacado_web: p.destacado_web === true,
         descripcion_corta: p.descripcion_corta ?? "",
         descripcion_web: p.descripcion_web ?? "",
+        marca_id: p.marca_id ?? "",
         marca: p.marca ?? "",
         precio_web: p.precio_web == null ? "" : String(p.precio_web),
         precio_oferta: p.precio_oferta == null ? "" : String(p.precio_oferta),
@@ -290,6 +294,7 @@ export default function EditarProductoPage() {
         visible_web: cw.visible_web,
         destacado_web: cw.destacado_web,
         marca: cw.marca,
+        marca_id: cw.marca_id,
         descripcion_corta: cw.descripcion_corta,
         descripcion_web: cw.descripcion_web,
         precio_web: cw.precio_web,
@@ -695,6 +700,7 @@ export default function EditarProductoPage() {
             onChange={setCatWeb}
             nombre={form.nombre}
             precioVenta={form.precio_venta}
+            marcas={marcas}
           />
 
           <div className="flex gap-4 pt-2">

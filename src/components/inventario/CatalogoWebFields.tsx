@@ -14,12 +14,17 @@ import { CONCENTRACIONES, isConcentracionCanonica } from "@/lib/inventario/conce
  *     las filas auxiliares en `familias_olfativas` y `notas_olfativas`.
  */
 
+export type MarcaOption = { id: string; nombre: string };
+
 export type CatalogoWebState = {
   slug_web: string;
   visible_web: boolean;
   destacado_web: boolean;
   descripcion_corta: string;
   descripcion_web: string;
+  /** FK opcional a elevate.marcas (Fase Marcas). */
+  marca_id: string;
+  /** Texto libre legacy — sigue persistiendo para compatibilidad. */
   marca: string;
   /** Legacy. NO editable desde UI. La web usa precio_venta. */
   precio_web: string;
@@ -43,6 +48,7 @@ export const emptyCatalogoWeb: CatalogoWebState = {
   destacado_web: false,
   descripcion_corta: "",
   descripcion_web: "",
+  marca_id: "",
   marca: "",
   precio_web: "",
   precio_oferta: "",
@@ -66,6 +72,8 @@ interface Props {
   nombre: string;
   /** Precio de venta del bloque superior — mostrado como informativo. */
   precioVenta?: string | number;
+  /** Lista de marcas formales para selector (Fase Marcas). Opcional. */
+  marcas?: MarcaOption[];
 }
 
 const inputClass =
@@ -79,9 +87,23 @@ function fmtGs(v: string | number | undefined): string {
   return `Gs. ${n.toLocaleString("es-PY")}`;
 }
 
-export function CatalogoWebFields({ value, onChange, nombre, precioVenta }: Props) {
+export function CatalogoWebFields({ value, onChange, nombre, precioVenta, marcas = [] }: Props) {
   function set<K extends keyof CatalogoWebState>(k: K, v: CatalogoWebState[K]) {
     onChange({ ...value, [k]: v });
+  }
+
+  /**
+   * Al elegir una marca formal del selector, sincronizamos también `marca`
+   * (texto legacy) con el nombre de la marca para que productos sin marca_id
+   * (carga vieja) sigan funcionando y los nuevos exporten el nombre legible.
+   */
+  function handleMarcaIdChange(id: string) {
+    const m = marcas.find((x) => x.id === id);
+    onChange({
+      ...value,
+      marca_id: id,
+      marca: m ? m.nombre : value.marca,
+    });
   }
 
   function handleGenerarSlug() {
@@ -157,17 +179,38 @@ export function CatalogoWebFields({ value, onChange, nombre, precioVenta }: Prop
         </label>
       </div>
 
-      {/* Marca + género */}
+      {/* Marca formal + texto legacy + género */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className={labelClass}>Marca</label>
-          <input
-            type="text"
-            value={value.marca}
-            onChange={(e) => set("marca", e.target.value)}
-            placeholder="Maison Élevé"
+          <select
+            value={value.marca_id}
+            onChange={(e) => handleMarcaIdChange(e.target.value)}
             className={inputClass}
-          />
+          >
+            <option value="">— Sin asignar —</option>
+            {marcas.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.nombre}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500 mt-1">
+            ¿Falta una marca?{" "}
+            <a href="/inventario/marcas" className="underline text-sky-700">
+              Crearla en Marcas
+            </a>
+            .
+          </p>
+          {!value.marca_id && value.marca && (
+            <p className="text-xs text-amber-700 mt-1">
+              Marca legacy en texto: <strong>{value.marca}</strong>. Asignala al
+              selector cuando puedas.
+            </p>
+          )}
+          {/* Input legacy oculto: el valor sigue persistiendo en BD. Cuando
+              cambia marca_id, el handler arriba sincroniza marca text. */}
+          <input type="hidden" value={value.marca} readOnly />
         </div>
         <div>
           <label className={labelClass}>Género</label>
@@ -376,6 +419,7 @@ export function catalogoWebToPayload(s: CatalogoWebState) {
     descripcion_corta: s.descripcion_corta.trim() || null,
     descripcion_web: s.descripcion_web.trim() || null,
     marca: s.marca.trim() || null,
+    marca_id: s.marca_id || null,
     /** Elevate no usa precio_web — la web toma precio_venta directo. */
     precio_web: null,
     precio_oferta: num(s.precio_oferta),

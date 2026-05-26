@@ -45,10 +45,18 @@ const PUBLIC_DETAIL_SELECT =
   "orden_web," +
   "familia:familias_olfativas(nombre,descripcion)," +
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
+  "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)," +
   "notas:producto_notas(posicion,orden,nota:notas_olfativas(nombre))";
 
 type FamiliaRef = { nombre: string | null; descripcion: string | null } | null;
 type CategoriaRef = {
+  nombre: string | null;
+  slug_web: string | null;
+  visible_web: boolean | null;
+  activo: boolean | null;
+} | null;
+type MarcaRef = {
+  id: string | null;
   nombre: string | null;
   slug_web: string | null;
   visible_web: boolean | null;
@@ -83,6 +91,7 @@ type ProductoDetalleRaw = {
   orden_web: number | null;
   familia: FamiliaRef;
   categoria: CategoriaRef;
+  marca_ref: MarcaRef;
   notas: NotaRow[] | null;
 };
 
@@ -164,6 +173,18 @@ function toDetalle(r: ProductoDetalleRaw) {
     categoria_slug:
       r.categoria && r.categoria.visible_web !== false && r.categoria.activo !== false
         ? r.categoria.slug_web ?? null
+        : null,
+    marca_id:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.id ?? null
+        : null,
+    marca_nombre:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.nombre ?? r.marca ?? null
+        : r.marca ?? null,
+    marca_slug:
+      r.marca_ref && r.marca_ref.visible_web !== false && r.marca_ref.activo !== false
+        ? r.marca_ref.slug_web ?? null
         : null,
     notas_top: pickNotas(r.notas, "top"),
     notas_heart: pickNotas(r.notas, "heart"),
