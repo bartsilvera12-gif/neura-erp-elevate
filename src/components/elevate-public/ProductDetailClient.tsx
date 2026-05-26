@@ -11,6 +11,7 @@ import { trackProductEvent } from "@/lib/elevate-public/track";
 import { useCart } from "./CartContext";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
+import { UsdEquivalent } from "./UsdEquivalent";
 
 const statusMap = {
   available: { label: "Disponible", cls: "text-gold border-gold/40" },
@@ -142,6 +143,7 @@ export function ProductDetailClient({
                 )}
                 <span className="font-display text-3xl text-primary">{formatPrice(product.price)}</span>
               </div>
+              <UsdEquivalent priceGs={product.price} className="mt-2 text-sm" />
 
               <div className="h-px bg-border my-8" />
 

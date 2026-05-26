@@ -5,6 +5,7 @@ import Image from "next/image";
 import { type Product, formatPrice } from "@/lib/elevate-public/products-mock";
 import { trackProductEvent } from "@/lib/elevate-public/track";
 import { useCart } from "./CartContext";
+import { UsdEquivalent } from "./UsdEquivalent";
 
 const statusMap: Record<Product["status"], { label: string; cls: string }> = {
   available: { label: "Disponible", cls: "text-gold border-gold/40" },
@@ -76,6 +77,7 @@ export function ProductCard({ product }: { product: Product }) {
           )}
           <span className="text-lg text-primary font-medium">{formatPrice(product.price)}</span>
         </div>
+        <UsdEquivalent priceGs={product.price} className="mt-0.5" />
 
         <div className="mt-auto pt-5">
           <button

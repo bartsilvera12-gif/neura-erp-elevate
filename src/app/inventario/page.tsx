@@ -7,6 +7,7 @@ import type { Producto } from "@/lib/inventario/types";
 import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
+import { CotizacionDolarCard } from "@/components/inventario/CotizacionDolarCard";
 
 function formatGs(valor: number) {
   return `Gs. ${valor.toLocaleString("es-PY")}`;
@@ -55,6 +56,8 @@ export default function InventarioPage() {
         <h1 className="text-3xl font-bold text-gray-800">Inventario</h1>
         <p className="text-gray-600">Gestión de productos y control de stock</p>
       </div>
+
+      <CotizacionDolarCard />
 
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
         {/* Encabezado: título + buscador + acciones */}

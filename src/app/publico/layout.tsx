@@ -3,6 +3,7 @@ import { Playfair_Display, Cormorant_Garamond, Inter } from "next/font/google";
 import { Header } from "@/components/elevate-public/Header";
 import { Footer } from "@/components/elevate-public/Footer";
 import { CartProvider } from "@/components/elevate-public/CartContext";
+import { CotizacionProvider } from "@/components/elevate-public/CotizacionContext";
 import { CartDrawer } from "@/components/elevate-public/CartDrawer";
 import { WhatsAppFloat } from "@/components/elevate-public/WhatsAppFloat";
 import "./elevate-theme.css";
@@ -52,13 +53,15 @@ export default function ElevatePublicLayout({
     <div
       className={`elevate-public-theme min-h-svh flex flex-col ${playfair.variable} ${cormorant.variable} ${inter.variable}`}
     >
-      <CartProvider>
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <CartDrawer />
-        <WhatsAppFloat />
-      </CartProvider>
+      <CotizacionProvider>
+        <CartProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <CartDrawer />
+          <WhatsAppFloat />
+        </CartProvider>
+      </CotizacionProvider>
     </div>
   );
 }
