@@ -33,7 +33,7 @@ export function Hero() {
             Elevate
           </h1>
           <p className="font-editorial italic text-2xl md:text-3xl text-gold-light mt-3">
-            La esencia de tu próximo momento.
+            La esencia de tu próximo negocio.
           </p>
           <div className="gold-divider w-40 my-8" />
           <p className="text-cream/90 text-base md:text-lg max-w-xl leading-relaxed">

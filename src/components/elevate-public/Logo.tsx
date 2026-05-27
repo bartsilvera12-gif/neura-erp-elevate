@@ -29,7 +29,7 @@ export function Logo({ variant = "dark" }: { variant?: "dark" | "light" }) {
             variant === "light" ? "text-gold-light" : "text-gold"
           }`}
         >
-          La esencia de tu próximo momento
+          La esencia de tu próximo negocio
         </div>
       </div>
     </Link>

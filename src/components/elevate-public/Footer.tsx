@@ -29,7 +29,7 @@ export function Footer() {
           <div className="md:col-span-2">
             <Logo variant="light" />
             <p className="mt-6 text-cream/70 leading-relaxed max-w-md font-editorial italic text-lg">
-              La esencia de tu próximo momento. Fragancias seleccionadas para quienes buscan elegancia,
+              La esencia de tu próximo negocio. Fragancias seleccionadas para quienes buscan elegancia,
               presencia y exclusividad.
             </p>
           </div>

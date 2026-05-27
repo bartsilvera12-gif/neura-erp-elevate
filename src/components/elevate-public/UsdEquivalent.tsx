@@ -27,9 +27,14 @@ export function UsdEquivalent({
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  // Más legible que la versión anterior (text-xs muted): sube a `text-sm`
+  // con `text-primary/85` (color bordó de la marca atenuado al 85%) para
+  // ganar contraste sin competir con el precio principal en guaraníes que
+  // usa `text-primary` puro a tamaño mayor. Mantiene `font-editorial` para
+  // conservar elegancia y `tracking-wide` para legibilidad.
   return (
     <span
-      className={`text-xs tracking-wide text-muted-foreground italic font-editorial ${className}`}
+      className={`text-sm tracking-wide font-editorial text-primary/85 ${className}`}
       title={`Equivalente aproximado · cotización Gs. ${cotizacion.toLocaleString("es-PY")} por USD 1`}
     >
       ≈ USD {texto}
