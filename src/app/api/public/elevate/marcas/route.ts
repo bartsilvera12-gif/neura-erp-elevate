@@ -45,40 +45,75 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const categoriaSlug = url.searchParams.get("categoria")?.trim().toLowerCase() || null;
 
-    // 1) Si vino ?categoria=, buscar las marca_id distintas de productos
-    //    visibles en esa categoría. Si no, traemos todas las marcas activas.
+    // 1) Si vino ?categoria=, resolver las marcas asociadas. Fase Categorías↔
+    //    Marcas: priorizamos la relación formal `marca_categorias`. Si la
+    //    categoría no tiene relaciones formales (caso histórico), caemos al
+    //    método anterior (deducir desde productos visibles en esa categoría).
     let marcaIdsFilter: string[] | null = null;
     if (categoriaSlug) {
-      const qsProd = new URLSearchParams({
-        select: "marca_id,categoria:categoria_principal_id!inner(slug_web)",
+      // 1.a) Lookup del categoria_id por slug.
+      const qsCat = new URLSearchParams({
+        select: "id",
+        slug_web: `eq.${categoriaSlug}`,
         activo: "eq.true",
         visible_web: "eq.true",
-        marca_id: "not.is.null",
-        limit: "1000",
+        limit: "1",
       });
-      qsProd.append("categoria.slug_web", `eq.${categoriaSlug}`);
-      const rProd = await postgrestGet<{ marca_id: string | null }>(
-        "productos",
-        qsProd.toString()
+      const rCat = await postgrestGet<{ id: string }>(
+        "categorias_productos",
+        qsCat.toString()
       );
-      if (!rProd.ok) {
-        console.error("[/api/public/elevate/marcas GET prods]", rProd.error);
-        return NextResponse.json(
-          { error: "No se pudieron cargar las marcas." },
-          { status: 502, headers: elevatePublicCorsHeaders() }
+      if (rCat.ok && rCat.rows.length > 0) {
+        const categoriaId = rCat.rows[0].id;
+        // 1.b) Relación formal marca_categorias.
+        const qsRel = new URLSearchParams({
+          select: "marca_id",
+          categoria_id: `eq.${categoriaId}`,
+          limit: "500",
+        });
+        const rRel = await postgrestGet<{ marca_id: string }>(
+          "marca_categorias",
+          qsRel.toString()
         );
+        if (rRel.ok && rRel.rows.length > 0) {
+          marcaIdsFilter = rRel.rows.map((x) => x.marca_id);
+        }
       }
-      const unique = new Set<string>();
-      for (const r of rProd.rows) {
-        if (r.marca_id) unique.add(r.marca_id);
+      // 1.c) Fallback: si no hay relaciones formales para esta categoría
+      // (legacy), deducimos por productos visibles en esa categoría — mismo
+      // comportamiento que antes de la Fase Categorías↔Marcas.
+      if (marcaIdsFilter === null) {
+        const qsProd = new URLSearchParams({
+          select: "marca_id,categoria:categoria_principal_id!inner(slug_web)",
+          activo: "eq.true",
+          visible_web: "eq.true",
+          marca_id: "not.is.null",
+          limit: "1000",
+        });
+        qsProd.append("categoria.slug_web", `eq.${categoriaSlug}`);
+        const rProd = await postgrestGet<{ marca_id: string | null }>(
+          "productos",
+          qsProd.toString()
+        );
+        if (!rProd.ok) {
+          console.error("[/api/public/elevate/marcas GET prods]", rProd.error);
+          return NextResponse.json(
+            { error: "No se pudieron cargar las marcas." },
+            { status: 502, headers: elevatePublicCorsHeaders() }
+          );
+        }
+        const unique = new Set<string>();
+        for (const r of rProd.rows) {
+          if (r.marca_id) unique.add(r.marca_id);
+        }
+        marcaIdsFilter = unique.size === 0 ? [] : [...unique];
       }
-      if (unique.size === 0) {
+      if (marcaIdsFilter.length === 0) {
         return NextResponse.json(
           { marcas: [] },
           { status: 200, headers: { ...elevatePublicCorsHeaders(), ...PUBLIC_CATALOG_CACHE } }
         );
       }
-      marcaIdsFilter = [...unique];
     }
 
     // 2) Cargar las marcas. RLS+policy anon ya garantiza visible_web=true AND

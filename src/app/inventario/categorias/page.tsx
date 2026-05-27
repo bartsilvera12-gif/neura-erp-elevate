@@ -6,6 +6,7 @@ import ExportExcelButton from "@/components/ui/ExportExcelButton";
 import ImportExcelButton from "@/components/ui/ImportExcelButton";
 import { useIsAdmin } from "@/lib/auth/use-is-admin";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { CategoriaMarcasModal } from "@/components/inventario/CategoriaMarcasModal";
 
 interface Categoria {
   id: string;
@@ -42,6 +43,8 @@ export default function CategoriasProductosPage() {
   const [codigo, setCodigo] = useState("");
   const [parentId, setParentId] = useState("");
   const [creating, setCreating] = useState(false);
+  // Modal "Gestionar marcas" por categoría.
+  const [gestionarMarcasDe, setGestionarMarcasDe] = useState<Categoria | null>(null);
 
   async function load() {
     setLoading(true);
@@ -257,12 +260,20 @@ export default function CategoriasProductosPage() {
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => toggleActivo(c)}
-                        className="text-xs text-sky-700 hover:text-sky-900 underline"
-                      >
-                        {c.activo ? "Desactivar" : "Activar"}
-                      </button>
+                      <div className="inline-flex items-center gap-3">
+                        <button
+                          onClick={() => setGestionarMarcasDe(c)}
+                          className="text-xs text-emerald-700 hover:text-emerald-900 underline"
+                        >
+                          Gestionar marcas
+                        </button>
+                        <button
+                          onClick={() => toggleActivo(c)}
+                          className="text-xs text-sky-700 hover:text-sky-900 underline"
+                        >
+                          {c.activo ? "Desactivar" : "Activar"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -271,6 +282,14 @@ export default function CategoriasProductosPage() {
           </table>
         )}
       </div>
+
+      {gestionarMarcasDe && (
+        <CategoriaMarcasModal
+          categoriaId={gestionarMarcasDe.id}
+          categoriaNombre={gestionarMarcasDe.nombre}
+          onClose={() => setGestionarMarcasDe(null)}
+        />
+      )}
     </div>
   );
 }

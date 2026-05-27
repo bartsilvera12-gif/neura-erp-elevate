@@ -338,74 +338,70 @@ export function PresentacionesEditor({ productoId, fallbackImagenUrl, onChange }
         </div>
       )}
 
-      {/* Alta */}
-      <div className="mt-4 border border-slate-200 rounded-lg p-3 bg-slate-50">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
+      {/* Alta — grid responsive, sin superposición. SKU ocupa más ancho y el
+          botón Generar va abajo del input para no encimarse. */}
+      <div className="mt-4 border border-slate-200 rounded-lg p-4 bg-slate-50">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">
           Nueva presentación
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end">
-          <div>
-            <label className="block text-[10px] text-slate-500 mb-1">ml</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3 items-start">
+          <div className="xl:col-span-1">
+            <label className="block text-xs text-slate-600 mb-1">ml</label>
             <input
               type="number"
               value={nVolumen}
               onChange={(e) => setNVolumen(e.target.value)}
               placeholder="50"
-              className={inputCls}
+              className={`${inputCls} text-sm`}
             />
           </div>
-          <div className="col-span-2">
-            <label className="block text-[10px] text-slate-500 mb-1">SKU</label>
-            <div className="flex gap-1">
-              <input
-                value={nSku}
-                onChange={(e) => setNSku(e.target.value.toUpperCase())}
-                placeholder="ELE_PER_####"
-                className={`${inputCls} font-mono flex-1`}
-              />
-              <button
-                type="button"
-                onClick={handleGenerarSku}
-                disabled={busy}
-                className="px-2 py-1 text-[10px] border border-emerald-300 text-emerald-700 rounded hover:bg-emerald-50 disabled:opacity-50"
-                title="Generar el próximo SKU disponible"
-              >
-                Generar
-              </button>
-            </div>
+          <div className="sm:col-span-2 xl:col-span-2">
+            <label className="block text-xs text-slate-600 mb-1">SKU</label>
+            <input
+              value={nSku}
+              onChange={(e) => setNSku(e.target.value.toUpperCase())}
+              placeholder="ELE_PER_####"
+              className={`${inputCls} text-sm font-mono w-full`}
+            />
+            <button
+              type="button"
+              onClick={handleGenerarSku}
+              disabled={busy}
+              className="mt-1 text-[11px] text-emerald-700 hover:text-emerald-900 underline disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Generar el próximo SKU disponible"
+            >
+              Generar SKU automático
+            </button>
           </div>
-          <div>
-            <label className="block text-[10px] text-slate-500 mb-1">Precio venta</label>
+          <div className="xl:col-span-1">
+            <label className="block text-xs text-slate-600 mb-1">Precio venta</label>
             <input
               type="number"
               value={nPrecioVenta}
               onChange={(e) => setNPrecioVenta(e.target.value)}
               placeholder="45000"
-              className={inputCls}
+              className={`${inputCls} text-sm`}
             />
           </div>
-          <div>
-            <label className="block text-[10px] text-slate-500 mb-1">Stock</label>
+          <div className="xl:col-span-1">
+            <label className="block text-xs text-slate-600 mb-1">Stock</label>
             <input
               type="number"
               value={nStock}
               onChange={(e) => setNStock(e.target.value)}
-              className={inputCls}
+              className={`${inputCls} text-sm`}
             />
           </div>
-        </div>
-        <div className="mt-2 flex items-center justify-between">
-          <p className="text-[10px] text-slate-500">
-            Visible y activa por defecto. Editá los detalles después en la fila.
-          </p>
-          <button
-            type="button"
-            onClick={handleCrear}
-            disabled={busy}
-            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-sm px-3 py-1.5 rounded-lg disabled:opacity-50"
-          >
-            {busy ? "Guardando…" : "Agregar presentación"}
-          </button>
+          <div className="xl:col-span-1 flex sm:items-end">
+            <button
+              type="button"
+              onClick={handleCrear}
+              disabled={busy}
+              className="w-full bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-sm px-3 py-2 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {busy ? "Guardando…" : "Agregar"}
+            </button>
+          </div>
         </div>
       </div>
 
