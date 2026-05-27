@@ -102,6 +102,7 @@ export interface ProductoRow {
   proximamente: boolean;
   orden_web: number | null;
   familia_olfativa_id: string | null;
+  tiene_presentaciones: boolean;
 }
 
 export interface InsertProductoInput {
@@ -150,7 +151,7 @@ const RETURNING = `
   slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, marca_id, precio_web,
   precio_mayorista, cantidad_minima_mayorista, visible_mayorista_web,
   precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
-  proximamente, orden_web, familia_olfativa_id
+  proximamente, orden_web, familia_olfativa_id, tiene_presentaciones
 `;
 
 // ─── Operaciones ──────────────────────────────────────────────────────────
@@ -264,6 +265,7 @@ export interface UpdateProductoInput {
   proximamente?: boolean;
   orden_web?: number | null;
   familia_olfativa_id?: string | null;
+  tiene_presentaciones?: boolean;
 }
 
 /** Update parcial. Devuelve la fila o null si no existe / no pertenece a la empresa. */
@@ -328,6 +330,7 @@ export async function updateProductoPg(
   if (patch.proximamente !== undefined) add("proximamente", patch.proximamente, "::boolean");
   if (patch.orden_web !== undefined) add("orden_web", patch.orden_web == null ? null : patch.orden_web, "::int");
   if (patch.familia_olfativa_id !== undefined) add("familia_olfativa_id", patch.familia_olfativa_id || null, "::uuid");
+  if (patch.tiene_presentaciones !== undefined) add("tiene_presentaciones", patch.tiene_presentaciones === true, "::boolean");
   if (sets.length === 0) return await getProductoPg(schemaRaw, empresaId, id);
 
   sets.push(`updated_at = now()`);

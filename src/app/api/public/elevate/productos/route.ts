@@ -58,6 +58,8 @@ const PUBLIC_SELECT =
   "precio_mayorista," +
   "cantidad_minima_mayorista," +
   "visible_mayorista_web," +
+  "tiene_presentaciones," +
+  "presentaciones:producto_presentaciones(precio_venta,precio_web,precio_oferta,oferta_hasta,activo,visible_web,stock_actual)," +
   "familia:familias_olfativas(nombre)," +
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)";
@@ -100,6 +102,18 @@ type ProductoRaw = {
   precio_mayorista: number | null;
   cantidad_minima_mayorista: number | null;
   visible_mayorista_web: boolean | null;
+  tiene_presentaciones: boolean | null;
+  presentaciones:
+    | {
+        precio_venta: number | null;
+        precio_web: number | null;
+        precio_oferta: number | null;
+        oferta_hasta: string | null;
+        activo: boolean | null;
+        visible_web: boolean | null;
+        stock_actual: number | null;
+      }[]
+    | null;
   familia: FamiliaRef;
   categoria: CategoriaRef;
   marca_ref: MarcaRef;
@@ -134,6 +148,12 @@ export type ProductoPublico = {
   /** Precio mayorista informativo (Fase Mayorista). Solo se exponen los 3
    *  campos si visible_mayorista_web=true Y precio>0 Y cantidad>=1. */
   mayorista: { precio: number; cantidad_minima: number } | null;
+  /** Fase Presentaciones: true si el producto tiene >=1 presentación visible.
+   *  La card debe llevar al detalle y obligar a elegir un ml. */
+  tiene_presentaciones: boolean;
+  /** Mínimo precio efectivo entre presentaciones visibles. Útil para
+   *  "Desde Gs. X" en la card. Null si no aplica. */
+  precio_desde: number | null;
 };
 
 function isOfertaActiva(precio_oferta: number | null, oferta_hasta: string | null): boolean {
@@ -224,6 +244,31 @@ export function toPublico(r: ProductoRaw): ProductoPublico {
         ? r.marca_ref.slug_web ?? null
         : null,
     orden_web: r.orden_web,
+    // Fase Presentaciones: si el producto tiene presentaciones visibles,
+    // calculamos el precio "desde" (mínimo precio efectivo entre las
+    // visibles+activas con stock). Si no, queda null y el card usa precio normal.
+    tiene_presentaciones: r.tiene_presentaciones === true,
+    precio_desde: (() => {
+      const rows = Array.isArray(r.presentaciones) ? r.presentaciones : [];
+      const visibles = rows.filter((p) => p && p.activo && p.visible_web);
+      if (visibles.length === 0) return null;
+      const precios: number[] = [];
+      for (const p of visibles) {
+        const venta =
+          typeof p.precio_venta === "number" && p.precio_venta > 0
+            ? p.precio_venta
+            : typeof p.precio_web === "number" && p.precio_web > 0
+              ? p.precio_web
+              : 0;
+        const ofertaActiva =
+          typeof p.precio_oferta === "number" &&
+          p.precio_oferta > 0 &&
+          (!p.oferta_hasta || Date.parse(p.oferta_hasta) > Date.now());
+        const precio = ofertaActiva ? (p.precio_oferta as number) : venta;
+        if (Number.isFinite(precio) && precio > 0) precios.push(precio);
+      }
+      return precios.length > 0 ? Math.min(...precios) : null;
+    })(),
     // Mayorista: solo se expone si está visible y los valores son sanos.
     mayorista:
       r.visible_mayorista_web === true &&

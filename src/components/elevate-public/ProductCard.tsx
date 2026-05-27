@@ -19,6 +19,18 @@ export function ProductCard({ product }: { product: Product }) {
   const s = statusMap[product.status];
   const disabled = product.status === "out" || product.status === "soon";
   const { add } = useCart();
+  /**
+   * Fase Presentaciones: si el producto tiene variantes por ml, la card NO
+   * puede agregar al carrito desde acá (faltaría elegir el ml). El precio
+   * mostrado pasa a ser "Desde Gs. X" usando el mínimo entre presentaciones
+   * visibles. El botón "Agregar al carrito" se reemplaza por "Elegí el ml".
+   */
+  const tienePresentaciones = product.tienePresentaciones === true;
+  const precioDesde =
+    typeof product.precioDesde === "number" && product.precioDesde > 0
+      ? product.precioDesde
+      : null;
+  const precioMostrado = tienePresentaciones && precioDesde ? precioDesde : product.price;
 
   return (
     <article className="group relative bg-background border border-border/60 hover:border-gold/60 transition-elegant shadow-soft hover:shadow-elegant flex flex-col overflow-hidden">
@@ -71,37 +83,68 @@ export function ProductCard({ product }: { product: Product }) {
         <div className="text-sm text-muted-foreground italic font-editorial">{product.type}</div>
 
         <div className="mt-3 flex items-baseline gap-3">
-          {product.oldPrice && (
+          {product.oldPrice && !tienePresentaciones && (
             <span className="text-sm text-muted-foreground line-through">
               {formatPrice(product.oldPrice)}
             </span>
           )}
-          <span className="text-lg text-primary font-medium">{formatPrice(product.price)}</span>
+          {tienePresentaciones && (
+            <span className="text-[10px] tracking-[0.2em] uppercase text-muted-foreground">
+              Desde
+            </span>
+          )}
+          <span className="text-lg text-primary font-medium">{formatPrice(precioMostrado)}</span>
         </div>
-        <UsdEquivalent priceGs={product.price} className="mt-0.5" />
-        <MayoristaLine mayorista={product.mayorista} className="mt-0.5 block" />
+        <UsdEquivalent priceGs={precioMostrado} className="mt-0.5" />
+        {!tienePresentaciones && (
+          <MayoristaLine mayorista={product.mayorista} className="mt-0.5 block" />
+        )}
+        {tienePresentaciones && (
+          <span className="mt-0.5 text-xs tracking-wide text-muted-foreground italic font-editorial block">
+            Elegí el ml en el detalle
+          </span>
+        )}
 
         <div className="mt-auto pt-5">
-          <button
-            type="button"
-            onClick={() => {
-              if (disabled) return;
-              add(product);
-              trackProductEvent({
-                product_id: product.id,
-                event_type: "add_to_cart",
-                source: "catalogo",
-              });
-            }}
-            disabled={disabled}
-            className={`w-full text-[11px] tracking-[0.3em] uppercase py-3 transition-elegant ${
-              disabled
-                ? "bg-muted text-muted-foreground cursor-not-allowed"
-                : "bg-primary text-primary-foreground hover:bg-primary-glow shadow-soft"
-            }`}
-          >
-            {disabled ? "No disponible" : "Agregar al carrito"}
-          </button>
+          {tienePresentaciones ? (
+            // Productos con presentaciones: la card no agrega al carrito; lleva
+            // al detalle, donde el usuario elige el ml y agrega.
+            <Link
+              href={`/producto/${product.slug}`}
+              onClick={() =>
+                trackProductEvent({
+                  product_id: product.id,
+                  event_type: "product_click",
+                  source: "catalogo",
+                  metadata: { slug: product.slug, motivo: "elegir_ml" },
+                })
+              }
+              className="block w-full text-center text-[11px] tracking-[0.3em] uppercase py-3 transition-elegant bg-primary text-primary-foreground hover:bg-primary-glow shadow-soft"
+            >
+              Elegí el ml
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (disabled) return;
+                add(product);
+                trackProductEvent({
+                  product_id: product.id,
+                  event_type: "add_to_cart",
+                  source: "catalogo",
+                });
+              }}
+              disabled={disabled}
+              className={`w-full text-[11px] tracking-[0.3em] uppercase py-3 transition-elegant ${
+                disabled
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:bg-primary-glow shadow-soft"
+              }`}
+            >
+              {disabled ? "No disponible" : "Agregar al carrito"}
+            </button>
+          )}
         </div>
       </div>
     </article>

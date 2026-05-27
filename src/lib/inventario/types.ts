@@ -57,6 +57,37 @@ export interface Producto {
   familia_olfativa_id?: string | null;
   /* Notas hidratadas — solo desde server al cargar/editar */
   notas?: ProductoNotaRef[];
+  /** Fase Presentaciones: si true, el producto se vende por ml y la web
+   *  obliga a elegir una presentación. */
+  tiene_presentaciones?: boolean;
+}
+
+/** Fase Presentaciones: cada presentación por ml de un producto. */
+export interface ProductoPresentacion {
+  id: string;
+  empresa_id: string;
+  producto_id: string;
+  sku: string;
+  codigo_barras: string | null;
+  codigo_barras_interno: boolean;
+  volumen_ml: number;
+  costo_promedio: number;
+  precio_venta: number;
+  precio_web: number | null;
+  precio_oferta: number | null;
+  oferta_hasta: string | null;
+  precio_mayorista: number | null;
+  cantidad_minima_mayorista: number | null;
+  visible_mayorista_web: boolean;
+  stock_actual: number;
+  stock_minimo: number;
+  imagen_path: string | null;
+  imagen_url: string | null;
+  visible_web: boolean;
+  activo: boolean;
+  orden: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface MovimientoInventario {

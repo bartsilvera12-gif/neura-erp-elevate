@@ -49,6 +49,9 @@ type ApiListaProducto = {
   orden_web: number | null;
   /** Precio mayorista informativo (Fase Mayorista). Null si no debe mostrarse. */
   mayorista?: { precio: number; cantidad_minima: number } | null;
+  /** Fase Presentaciones (listado). */
+  tiene_presentaciones?: boolean;
+  precio_desde?: number | null;
 };
 
 export type ApiDetalleProducto = ApiListaProducto & {
@@ -67,6 +70,23 @@ export type ApiDetalleProducto = ApiListaProducto & {
     es_principal: boolean;
     alt_text: string | null;
   }[];
+  /** Fase Presentaciones (detalle): lista filtrada+ordenada por el server. */
+  presentaciones?: ApiPresentacion[];
+};
+
+export type ApiPresentacion = {
+  id: string;
+  sku: string | null;
+  volumen_ml: number | null;
+  precio: number;
+  precio_normal: number;
+  precio_web: number | null;
+  precio_oferta: number | null;
+  stock_actual: number;
+  disponible: boolean;
+  imagen_url: string | null;
+  visible_web: boolean;
+  mayorista: { precio: number; cantidad_minima: number } | null;
 };
 
 function defaultCategoryFor(brand: string | null): ProductCategory {
@@ -133,6 +153,11 @@ export function apiToMockProduct(api: ApiListaProducto): Product {
     concentration: api.concentracion ?? fromMock?.concentration ?? "",
     size: buildSize(api.volumen_ml) || fromMock?.size || "",
     mayorista: api.mayorista ?? null,
+    tienePresentaciones: api.tiene_presentaciones === true,
+    precioDesde:
+      typeof api.precio_desde === "number" && api.precio_desde > 0
+        ? api.precio_desde
+        : null,
   };
 }
 
@@ -154,12 +179,28 @@ export function apiDetalleToMockProduct(api: ApiDetalleProducto): Product {
         .filter((x) => x && x.url)
         .map((x) => ({ url: x.url, alt: x.alt_text }))
     : [];
+  const presentaciones = Array.isArray(api.presentaciones)
+    ? api.presentaciones.map((p) => ({
+        id: p.id,
+        sku: p.sku,
+        volumen_ml: p.volumen_ml,
+        precio: p.precio,
+        precio_normal: p.precio_normal,
+        precio_oferta: p.precio_oferta,
+        stock_actual: p.stock_actual,
+        disponible: p.disponible,
+        imagen_url: p.imagen_url,
+        mayorista: p.mayorista,
+      }))
+    : [];
   return {
     ...base,
     sku: api.sku ?? undefined,
     description: api.descripcion_web ?? api.descripcion_corta ?? base.description,
     notes: totalApi > 0 ? apiNotas : base.notes,
     gallery,
+    presentaciones,
+    tienePresentaciones: api.tiene_presentaciones === true,
   };
 }
 

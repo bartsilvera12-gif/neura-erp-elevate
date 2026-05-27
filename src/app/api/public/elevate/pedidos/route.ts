@@ -45,7 +45,11 @@ function clientIp(req: NextRequest): string {
   return "unknown";
 }
 
-type ItemIn = { producto_id?: unknown; cantidad?: unknown };
+type ItemIn = {
+  producto_id?: unknown;
+  presentacion_id?: unknown;
+  cantidad?: unknown;
+};
 
 function sanitizeStr(v: unknown, max = 500): string | null {
   if (typeof v !== "string") return null;
@@ -118,9 +122,16 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: elevatePublicCorsHeaders() }
     );
   }
+  // Fase Presentaciones: el cliente puede pasar `presentacion_id` opcional.
+  // El RPC valida pertenencia (empresa + producto) y recalcula precio/stock
+  // desde la presentación. NUNCA aceptamos precio del cliente.
   const items = (itemsRaw as ItemIn[])
     .map((i) => ({
       producto_id: typeof i.producto_id === "string" ? i.producto_id : null,
+      presentacion_id:
+        typeof i.presentacion_id === "string" && i.presentacion_id.length > 0
+          ? i.presentacion_id
+          : null,
       cantidad: typeof i.cantidad === "number" ? i.cantidad : Number(i.cantidad ?? 0),
     }))
     .filter((i) => i.producto_id && i.cantidad > 0);

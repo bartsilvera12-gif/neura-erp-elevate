@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { X, Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { formatPrice } from "@/lib/elevate-public/products-mock";
-import { useCart } from "./CartContext";
+import { useCart, effectivePrice, effectiveImage, effectiveLabel } from "./CartContext";
 
 export function CartDrawer() {
   const { open, setOpen, items, setQty, remove, total, count } = useCart();
@@ -64,57 +64,63 @@ export function CartDrawer() {
             </div>
           ) : (
             <ul className="space-y-5">
-              {items.map((i) => (
-                <li key={i.product.id} className="flex gap-4 pb-5 border-b border-border/60">
-                  <div className="relative w-20 h-24 shrink-0 bg-cream">
-                    <Image
-                      src={i.product.image}
-                      alt={i.product.name}
-                      fill
-                      sizes="80px"
-                      className="object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] tracking-[0.25em] uppercase text-gold">{i.product.brand}</div>
-                    <div className="font-display text-base text-primary mt-1">{i.product.name}</div>
-                    <div className="text-xs text-muted-foreground italic font-editorial">{i.product.size}</div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center border border-border">
-                        <button
-                          type="button"
-                          onClick={() => setQty(i.product.id, i.qty - 1)}
-                          className="p-2 hover:bg-cream text-foreground/70"
-                          aria-label="Restar"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="px-3 text-sm">{i.qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQty(i.product.id, i.qty + 1)}
-                          className="p-2 hover:bg-cream text-foreground/70"
-                          aria-label="Sumar"
-                        >
-                          <Plus size={12} />
-                        </button>
-                      </div>
-                      <div className="text-sm text-primary font-medium">
-                        {formatPrice(i.product.price * i.qty)}
-                      </div>
+              {items.map((i) => {
+                const unitPrice = effectivePrice(i);
+                const label = effectiveLabel(i);
+                return (
+                  <li key={i.key} className="flex gap-4 pb-5 border-b border-border/60">
+                    <div className="relative w-20 h-24 shrink-0 bg-cream">
+                      <Image
+                        src={effectiveImage(i)}
+                        alt={label}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => remove(i.product.id)}
-                      aria-label={`Quitar ${i.product.name} del carrito`}
-                      className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-red-600 mt-2 transition-colors"
-                    >
-                      <Trash2 size={12} aria-hidden="true" />
-                      Quitar
-                    </button>
-                  </div>
-                </li>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] tracking-[0.25em] uppercase text-gold">{i.product.brand}</div>
+                      <div className="font-display text-base text-primary mt-1">{label}</div>
+                      {!i.presentacion && (
+                        <div className="text-xs text-muted-foreground italic font-editorial">{i.product.size}</div>
+                      )}
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="flex items-center border border-border">
+                          <button
+                            type="button"
+                            onClick={() => setQty(i.key, i.qty - 1)}
+                            className="p-2 hover:bg-cream text-foreground/70"
+                            aria-label="Restar"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="px-3 text-sm">{i.qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => setQty(i.key, i.qty + 1)}
+                            className="p-2 hover:bg-cream text-foreground/70"
+                            aria-label="Sumar"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                        <div className="text-sm text-primary font-medium">
+                          {formatPrice(unitPrice * i.qty)}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => remove(i.key)}
+                        aria-label={`Quitar ${label} del carrito`}
+                        className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.25em] uppercase text-muted-foreground hover:text-red-600 mt-2 transition-colors"
+                      >
+                        <Trash2 size={12} aria-hidden="true" />
+                        Quitar
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

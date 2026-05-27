@@ -9,6 +9,7 @@ import { type Product, formatPrice, products } from "@/lib/elevate-public/produc
 import { buildProductWhatsappLink } from "@/lib/elevate-public/whatsapp";
 import { trackProductEvent } from "@/lib/elevate-public/track";
 import { useCart } from "./CartContext";
+import type { WebPresentacion } from "@/lib/elevate-public/products-mock";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
 import { UsdEquivalent } from "./UsdEquivalent";
@@ -30,19 +31,49 @@ export function ProductDetailClient({
   whatsappNumber?: string | null;
 }) {
   const router = useRouter();
-  const { add, setOpen } = useCart();
+  const { add, addWithPresentacion, setOpen } = useCart();
   const [qty, setQty] = useState(1);
 
+  // Fase Presentaciones: si el producto tiene variantes por ml, el usuario
+  // debe elegir una antes de agregar al carrito. La presentación elegida
+  // sobreescribe precio, imagen, stock y mayorista del producto base.
+  const presentaciones: WebPresentacion[] = product.presentaciones ?? [];
+  const tienePresentaciones = product.tienePresentaciones === true && presentaciones.length > 0;
+  const [presentacionIdSeleccionada, setPresentacionIdSeleccionada] = useState<string | null>(
+    null
+  );
+  // Auto-seleccionar la primera presentación visible al montar (UX: el usuario
+  // siempre ve un precio concreto al abrir el detalle).
+  useEffect(() => {
+    if (tienePresentaciones && !presentacionIdSeleccionada) {
+      const primera = presentaciones.find((p) => p.disponible) ?? presentaciones[0];
+      if (primera) setPresentacionIdSeleccionada(primera.id);
+    }
+  }, [tienePresentaciones, presentaciones, presentacionIdSeleccionada]);
+  const presentacionElegida =
+    presentaciones.find((p) => p.id === presentacionIdSeleccionada) ?? null;
+  const precioEfectivo = presentacionElegida?.precio ?? product.price;
+  const mayoristaEfectivo = presentacionElegida?.mayorista ?? product.mayorista ?? null;
+  const stockDisponiblePresentacion =
+    presentacionElegida == null || presentacionElegida.disponible;
+
   // Galería (Fase Galería). Si el adapter devolvió `gallery`, la usamos; si
-  // está vacío, fallback a la imagen única `product.image`.
+  // está vacío, fallback a la imagen única `product.image`. Si hay
+  // presentación elegida con imagen propia, esa imagen tiene prioridad como
+  // primera de la galería.
   const galleryImages = useMemo(() => {
-    const list = product.gallery && product.gallery.length > 0
-      ? product.gallery
-      : product.image
-        ? [{ url: product.image, alt: null }]
-        : [];
-    return list;
-  }, [product.gallery, product.image]);
+    const presImg = presentacionElegida?.imagen_url ?? null;
+    const base =
+      product.gallery && product.gallery.length > 0
+        ? product.gallery
+        : product.image
+          ? [{ url: product.image, alt: null as string | null }]
+          : [];
+    if (!presImg) return base;
+    // Insertamos la imagen de la presentación al inicio si no estaba ya.
+    if (base.some((b) => b.url === presImg)) return base;
+    return [{ url: presImg, alt: null }, ...base];
+  }, [product.gallery, product.image, presentacionElegida?.imagen_url]);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
   // Reset al cambiar de producto.
   useEffect(() => {
@@ -86,6 +117,18 @@ export function ProductDetailClient({
 
   const handleAdd = () => {
     if (disabled) return;
+    if (tienePresentaciones) {
+      if (!presentacionElegida) return;
+      if (!presentacionElegida.disponible) return;
+      addWithPresentacion(product, presentacionElegida, qty);
+      trackProductEvent({
+        product_id: product.id,
+        event_type: "add_to_cart",
+        source: "detalle",
+        metadata: { qty, presentacion_id: presentacionElegida.id, volumen_ml: presentacionElegida.volumen_ml },
+      });
+      return;
+    }
     add(product, qty);
     trackProductEvent({
       product_id: product.id,
@@ -187,17 +230,53 @@ export function ProductDetailClient({
               </div>
 
               <div className="mt-6 flex items-baseline gap-4">
-                {product.oldPrice && (
+                {product.oldPrice && !tienePresentaciones && (
                   <span className="text-lg text-muted-foreground line-through">
                     {formatPrice(product.oldPrice)}
                   </span>
                 )}
-                <span className="font-display text-3xl text-primary">{formatPrice(product.price)}</span>
+                <span className="font-display text-3xl text-primary">{formatPrice(precioEfectivo)}</span>
               </div>
-              <UsdEquivalent priceGs={product.price} className="mt-2 text-sm" />
-              {product.mayorista && (
+              <UsdEquivalent priceGs={precioEfectivo} className="mt-2 text-sm" />
+              {mayoristaEfectivo && (
                 <div className="mt-3 inline-flex items-center gap-2 border border-gold/40 bg-gold/5 px-4 py-2 text-foreground/85">
-                  <MayoristaLine mayorista={product.mayorista} className="text-sm not-italic font-sans tracking-normal text-foreground/85" />
+                  <MayoristaLine mayorista={mayoristaEfectivo} className="text-sm not-italic font-sans tracking-normal text-foreground/85" />
+                </div>
+              )}
+
+              {/* Fase Presentaciones: selector de ml */}
+              {tienePresentaciones && (
+                <div className="mt-6">
+                  <h2 className="text-[11px] tracking-[0.3em] uppercase text-gold mb-3">Volumen</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {presentaciones.map((pres) => {
+                      const elegida = pres.id === presentacionIdSeleccionada;
+                      const noStock = !pres.disponible;
+                      return (
+                        <button
+                          key={pres.id}
+                          type="button"
+                          onClick={() => setPresentacionIdSeleccionada(pres.id)}
+                          disabled={noStock}
+                          className={`px-4 py-2 text-xs tracking-[0.2em] uppercase border transition-elegant ${
+                            elegida
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "border-border text-foreground/80 hover:border-gold hover:text-primary"
+                          } ${noStock ? "opacity-50 cursor-not-allowed" : ""}`}
+                          aria-pressed={elegida}
+                          title={noStock ? "Sin stock" : `${pres.volumen_ml} ml`}
+                        >
+                          {pres.volumen_ml} ml
+                          {noStock && <span className="ml-1 text-[10px]">(s/stock)</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {presentacionElegida && (
+                    <p className="mt-2 text-xs text-muted-foreground italic font-editorial">
+                      SKU presentación: <span className="font-mono not-italic">{presentacionElegida.sku ?? "—"}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -271,28 +350,42 @@ export function ProductDetailClient({
                 <button
                   type="button"
                   onClick={handleAdd}
-                  disabled={disabled}
+                  disabled={
+                    disabled ||
+                    (tienePresentaciones && (!presentacionElegida || !stockDisponiblePresentacion))
+                  }
                   className={`flex-1 inline-flex items-center justify-center gap-3 py-4 text-[11px] tracking-[0.3em] uppercase transition-elegant shadow-soft ${
-                    disabled
+                    disabled || (tienePresentaciones && !stockDisponiblePresentacion)
                       ? "bg-muted text-muted-foreground cursor-not-allowed"
                       : "bg-primary text-primary-foreground hover:bg-primary-glow"
                   }`}
                 >
                   <ShoppingBag size={16} />
-                  {disabled ? "No disponible" : `Agregar al carrito · ${formatPrice(product.price * qty)}`}
+                  {disabled
+                    ? "No disponible"
+                    : tienePresentaciones && !stockDisponiblePresentacion
+                      ? "Sin stock en esta presentación"
+                      : `Agregar al carrito · ${formatPrice(precioEfectivo * qty)}`}
                 </button>
               </div>
 
-              {!disabled && (
+              {!disabled && (!tienePresentaciones || (presentacionElegida && stockDisponiblePresentacion)) && (
                 <button
                   type="button"
                   onClick={() => {
-                    add(product, qty);
+                    if (tienePresentaciones && presentacionElegida) {
+                      addWithPresentacion(product, presentacionElegida, qty);
+                    } else {
+                      add(product, qty);
+                    }
                     trackProductEvent({
                       product_id: product.id,
                       event_type: "add_to_cart",
                       source: "detalle-comprar-ahora",
-                      metadata: { qty },
+                      metadata: {
+                        qty,
+                        presentacion_id: presentacionElegida?.id ?? null,
+                      },
                     });
                     setOpen(false);
                     router.push("/checkout");

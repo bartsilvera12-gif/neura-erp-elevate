@@ -43,6 +43,7 @@ interface ProductoRow {
   precio_mayorista?: number | null;
   cantidad_minima_mayorista?: number | null;
   visible_mayorista_web?: boolean | null;
+  tiene_presentaciones?: boolean | null;
   /* Catálogo enriquecido (Fase 1 catálogo) — el endpoint singular los devuelve
    * desde el fix 519d10f; faltaba que el mapper los pasara al form. */
   precio_oferta?: number | null;
@@ -112,6 +113,7 @@ function rowToProducto(row: ProductoRow): Producto {
     cantidad_minima_mayorista:
       row.cantidad_minima_mayorista == null ? null : Number(row.cantidad_minima_mayorista),
     visible_mayorista_web: row.visible_mayorista_web === true,
+    tiene_presentaciones: row.tiene_presentaciones === true,
     // Fix: estos campos venían del backend pero el mapper los descartaba,
     // dejando el form de edición vacío aunque la DB y el endpoint los traían.
     precio_oferta: row.precio_oferta == null ? null : Number(row.precio_oferta),

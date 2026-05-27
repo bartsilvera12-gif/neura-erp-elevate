@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Minus, Plus, Trash2 } from "lucide-react";
-import { useCart } from "@/components/elevate-public/CartContext";
+import { useCart, effectivePrice, effectiveImage, effectiveLabel } from "@/components/elevate-public/CartContext";
 import { formatPrice, WHATSAPP_NUMBER } from "@/lib/elevate-public/products-mock";
 
 interface Form {
@@ -53,7 +53,13 @@ export default function CheckoutPage() {
             ciudad: form.city,
             zip: form.zip,
           },
-          items: items.map((i) => ({ producto_id: i.product.id, cantidad: i.qty })),
+          // Fase Presentaciones: el server recalcula precio desde la fila
+          // correcta (productos o producto_presentaciones). Solo mandamos ids.
+          items: items.map((i) => ({
+            producto_id: i.product.id,
+            presentacion_id: i.presentacion?.id ?? null,
+            cantidad: i.qty,
+          })),
           payment_method: form.payment,
           notas: form.notes,
         }),
@@ -83,10 +89,12 @@ export default function CheckoutPage() {
       id: createdNumero,
       createdAt: new Date().toISOString(),
       items: items.map((i) => ({
-        name: i.product.name,
+        name: effectiveLabel(i),
         brand: i.product.brand,
         qty: i.qty,
-        price: i.product.price,
+        price: effectivePrice(i),
+        presentacion_id: i.presentacion?.id ?? null,
+        volumen_ml: i.presentacion?.volumen_ml ?? null,
       })),
       total: createdTotal,
       customer: form,
@@ -108,7 +116,7 @@ export default function CheckoutPage() {
       ``,
       `*Productos:*`,
       ...items.map(
-        (i) => `• ${i.product.name} — ${i.product.brand} × ${i.qty} — ${formatPrice(i.product.price * i.qty)}`
+        (i) => `• ${effectiveLabel(i)} — ${i.product.brand} × ${i.qty} — ${formatPrice(effectivePrice(i) * i.qty)}`
       ),
       ``,
       `*Total:* ${formatPrice(createdTotal)}`,
@@ -241,47 +249,51 @@ export default function CheckoutPage() {
             <div className="gold-divider w-12 my-4" />
 
             <ul className="space-y-5 max-h-[400px] overflow-y-auto pr-2">
-              {items.map((i) => (
-                <li key={i.product.id} className="flex gap-4">
-                  <div className="relative w-16 h-20 shrink-0 bg-background">
-                    <Image src={i.product.image} alt={i.product.name} fill sizes="64px" className="object-cover" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] tracking-[0.25em] uppercase text-gold">{i.product.brand}</div>
-                    <div className="font-display text-sm text-primary">{i.product.name}</div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <div className="flex items-center border border-border bg-background">
-                        <button
-                          type="button"
-                          onClick={() => setQty(i.product.id, i.qty - 1)}
-                          className="p-1.5 text-foreground/70"
-                          aria-label="Restar"
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <span className="px-2 text-xs">{i.qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQty(i.product.id, i.qty + 1)}
-                          className="p-1.5 text-foreground/70"
-                          aria-label="Sumar"
-                        >
-                          <Plus size={10} />
-                        </button>
-                      </div>
-                      <span className="text-sm text-primary">{formatPrice(i.product.price * i.qty)}</span>
+              {items.map((i) => {
+                const label = effectiveLabel(i);
+                const unitPrice = effectivePrice(i);
+                return (
+                  <li key={i.key} className="flex gap-4">
+                    <div className="relative w-16 h-20 shrink-0 bg-background">
+                      <Image src={effectiveImage(i)} alt={label} fill sizes="64px" className="object-cover" />
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => remove(i.product.id)}
-                    aria-label="Quitar"
-                    className="text-muted-foreground hover:text-primary self-start"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </li>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] tracking-[0.25em] uppercase text-gold">{i.product.brand}</div>
+                      <div className="font-display text-sm text-primary">{label}</div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <div className="flex items-center border border-border bg-background">
+                          <button
+                            type="button"
+                            onClick={() => setQty(i.key, i.qty - 1)}
+                            className="p-1.5 text-foreground/70"
+                            aria-label="Restar"
+                          >
+                            <Minus size={10} />
+                          </button>
+                          <span className="px-2 text-xs">{i.qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => setQty(i.key, i.qty + 1)}
+                            className="p-1.5 text-foreground/70"
+                            aria-label="Sumar"
+                          >
+                            <Plus size={10} />
+                          </button>
+                        </div>
+                        <span className="text-sm text-primary">{formatPrice(unitPrice * i.qty)}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => remove(i.key)}
+                      aria-label="Quitar"
+                      className="text-muted-foreground hover:text-primary self-start"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
 
             <div className="border-t border-border mt-6 pt-5 space-y-2">

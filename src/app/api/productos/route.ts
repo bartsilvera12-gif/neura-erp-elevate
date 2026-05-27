@@ -24,7 +24,7 @@ const PRODUCTOS_COLS_PRIV =
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
   "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
-  "proximamente,orden_web,familia_olfativa_id";
+  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones";
 
 /**
  * GET /api/productos — lista de productos activos.

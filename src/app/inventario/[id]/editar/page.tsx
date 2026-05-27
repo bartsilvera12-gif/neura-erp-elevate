@@ -7,6 +7,7 @@ import MontoInput from "@/components/ui/MontoInput";
 import { getProducto, productoExiste, updateProducto } from "@/lib/inventario/storage";
 import type { MetodoValuacion } from "@/lib/inventario/types";
 import { ProductGaleria } from "@/components/inventario/ProductGaleria";
+import { PresentacionesEditor } from "@/components/inventario/PresentacionesEditor";
 import SelectFromList from "@/components/inventario/SelectFromList";
 import { UNIDADES_MEDIDA, isUnidadMedidaCanonica, normalizeUnidadMedida } from "@/lib/inventario/unidades-medida";
 import {
@@ -560,6 +561,14 @@ export default function EditarProductoPage() {
                 <span className="ml-2 text-xs text-gray-400">(opcional)</span>
               </div>
             )}
+          </div>
+
+          {/* Presentaciones por ml (Fase Presentaciones). */}
+          <div className="border-t border-slate-100 pt-6">
+            <PresentacionesEditor
+              productoId={id}
+              fallbackImagenUrl={imagenUrl}
+            />
           </div>
 
           {/* Galería del producto — hasta 5 imágenes (Fase Galería). El

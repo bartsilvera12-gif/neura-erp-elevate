@@ -50,6 +50,8 @@ const PUBLIC_DETAIL_SELECT =
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)," +
   "imagenes:producto_imagenes(id,imagen_url,imagen_path,orden,es_principal,alt_text)," +
+  "tiene_presentaciones," +
+  "presentaciones:producto_presentaciones(id,sku,volumen_ml,precio_venta,precio_web,precio_oferta,oferta_hasta,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web,stock_actual,stock_minimo,imagen_url,visible_web,activo,orden)," +
   "notas:producto_notas(posicion,orden,nota:notas_olfativas(nombre))";
 
 type FamiliaRef = { nombre: string | null; descripcion: string | null } | null;
@@ -78,6 +80,24 @@ type ImagenRow = {
   orden: number | null;
   es_principal: boolean | null;
   alt_text: string | null;
+};
+type PresentacionRow = {
+  id: string;
+  sku: string | null;
+  volumen_ml: number | null;
+  precio_venta: number | null;
+  precio_web: number | null;
+  precio_oferta: number | null;
+  oferta_hasta: string | null;
+  precio_mayorista: number | null;
+  cantidad_minima_mayorista: number | null;
+  visible_mayorista_web: boolean | null;
+  stock_actual: number | null;
+  stock_minimo: number | null;
+  imagen_url: string | null;
+  visible_web: boolean | null;
+  activo: boolean | null;
+  orden: number | null;
 };
 
 type ProductoDetalleRaw = {
@@ -108,6 +128,8 @@ type ProductoDetalleRaw = {
   categoria: CategoriaRef;
   marca_ref: MarcaRef;
   imagenes: ImagenRow[] | null;
+  tiene_presentaciones: boolean | null;
+  presentaciones: PresentacionRow[] | null;
   notas: NotaRow[] | null;
 };
 
@@ -249,6 +271,53 @@ function toDetalle(r: ProductoDetalleRaw) {
             cantidad_minima: r.cantidad_minima_mayorista,
           }
         : null,
+    // Presentaciones (Fase Presentaciones). Solo las activas y visibles, con
+    // shape simplificado para la web. Precio efectivo: oferta vigente o
+    // precio_venta (con fallback a precio_web legacy).
+    tiene_presentaciones: r.tiene_presentaciones === true,
+    presentaciones: (() => {
+      const rows = Array.isArray(r.presentaciones) ? r.presentaciones : [];
+      const filtradas = rows.filter((p) => p && p.activo && p.visible_web);
+      filtradas.sort(
+        (a, b) => (a.orden ?? 0) - (b.orden ?? 0) || (a.volumen_ml ?? 0) - (b.volumen_ml ?? 0)
+      );
+      return filtradas.map((p) => {
+        const venta =
+          typeof p.precio_venta === "number" && p.precio_venta > 0
+            ? p.precio_venta
+            : typeof p.precio_web === "number" && p.precio_web > 0
+              ? p.precio_web
+              : 0;
+        const ofertaActiva =
+          typeof p.precio_oferta === "number" &&
+          p.precio_oferta > 0 &&
+          (!p.oferta_hasta || Date.parse(p.oferta_hasta) > Date.now());
+        const precio = ofertaActiva ? (p.precio_oferta as number) : venta;
+        const stock = typeof p.stock_actual === "number" ? p.stock_actual : 0;
+        const mayoristaOk =
+          p.visible_mayorista_web === true &&
+          typeof p.precio_mayorista === "number" &&
+          p.precio_mayorista > 0 &&
+          typeof p.cantidad_minima_mayorista === "number" &&
+          p.cantidad_minima_mayorista >= 1;
+        return {
+          id: p.id,
+          sku: p.sku,
+          volumen_ml: p.volumen_ml,
+          precio,
+          precio_normal: venta,
+          precio_web: p.precio_web,
+          precio_oferta: ofertaActiva ? p.precio_oferta : null,
+          stock_actual: stock,
+          disponible: stock > 0,
+          imagen_url: p.imagen_url ?? null,
+          visible_web: p.visible_web === true,
+          mayorista: mayoristaOk
+            ? { precio: p.precio_mayorista as number, cantidad_minima: p.cantidad_minima_mayorista as number }
+            : null,
+        };
+      });
+    })(),
     notas_top: pickNotas(r.notas, "top"),
     notas_heart: pickNotas(r.notas, "heart"),
     notas_base: pickNotas(r.notas, "base"),

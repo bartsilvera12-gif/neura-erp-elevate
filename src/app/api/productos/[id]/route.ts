@@ -25,7 +25,7 @@ const PRODUCTO_COLS_PRIV =
   // con los campos del catálogo web / promo vacíos aunque estuvieran guardados
   // en DB (el PATCH sí los persistía; solo el GET no los traía de vuelta).
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
-  "proximamente,orden_web,familia_olfativa_id";
+  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones";
 
 type ProductoRow = Record<string, unknown> & { id?: string };
 

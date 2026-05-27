@@ -48,6 +48,26 @@ export interface Product {
   gallery?: { url: string; alt: string | null }[];
   /** Precio mayorista informativo (Fase Mayorista). Null/undefined = no mostrar. */
   mayorista?: { precio: number; cantidad_minima: number } | null;
+  /** Fase Presentaciones: si true, el detalle obliga a elegir un ml. */
+  tienePresentaciones?: boolean;
+  /** Precio mínimo entre presentaciones visibles, para mostrar "Desde Gs. X" en cards. */
+  precioDesde?: number | null;
+  /** Listado completo para el selector en el detalle. */
+  presentaciones?: WebPresentacion[];
+}
+
+/** Shape simplificado de una presentación expuesto al cliente público. */
+export interface WebPresentacion {
+  id: string;
+  sku: string | null;
+  volumen_ml: number | null;
+  precio: number;
+  precio_normal: number;
+  precio_oferta: number | null;
+  stock_actual: number;
+  disponible: boolean;
+  imagen_url: string | null;
+  mayorista: { precio: number; cantidad_minima: number } | null;
 }
 
 const IMG = "/brand/elevate";
