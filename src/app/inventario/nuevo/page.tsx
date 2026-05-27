@@ -42,6 +42,40 @@ export default function NuevoProductoPage() {
   const [submitting, setSubmitting] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
   const [codigoGeneradoInterno, setCodigoGeneradoInterno] = useState(false);
+  const [generandoSku, setGenerandoSku] = useState(false);
+
+  /**
+   * Pide a /api/productos/generar-sku el próximo SKU disponible y rellena
+   * el input. Si el campo ya tiene valor, pide confirmación antes de
+   * sobreescribir. Si el usuario cancela el form después, queda un salto
+   * en la secuencia — aceptable según política (prioridad: unicidad).
+   */
+  async function handleGenerarSku() {
+    if (generandoSku) return;
+    if (form.sku.trim() && !confirm("Ya hay un SKU cargado. ¿Reemplazarlo por uno generado automáticamente?")) {
+      return;
+    }
+    setGenerandoSku(true);
+    setErrorDuplicado(null);
+    setErrorGeneral(null);
+    try {
+      const r = await fetchWithSupabaseSession("/api/productos/generar-sku", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefijo: "ELE_PER" }),
+      });
+      const j = await r.json();
+      if (r.ok && j?.success && typeof j.data?.sku === "string") {
+        setForm((prev) => ({ ...prev, sku: j.data.sku }));
+      } else {
+        setErrorGeneral(j?.error ?? "No se pudo generar el SKU.");
+      }
+    } catch (err) {
+      setErrorGeneral(err instanceof Error ? err.message : "Error de red");
+    } finally {
+      setGenerandoSku(false);
+    }
+  }
 
   // Catálogo web (Fase 1 catálogo enriquecido)
   const [catWeb, setCatWeb] = useState<CatalogoWebState>(emptyCatalogoWeb);
@@ -399,10 +433,25 @@ export default function NuevoProductoPage() {
                 name="sku"
                 value={form.sku}
                 onChange={handleChange}
-                placeholder="Ej: OOTD-001"
+                placeholder="Ej: ELE_PER_0022"
                 className={`${inputClass} uppercase`}
                 required
               />
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={handleGenerarSku}
+                  disabled={generandoSku}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-900 border border-emerald-200 hover:bg-emerald-50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Genera el próximo SKU disponible con formato ELE_PER_####"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H3.989a.75.75 0 0 0-.75.75v4.242a.75.75 0 0 0 1.5 0v-2.43l.31.31a7 7 0 0 0 11.712-3.138.75.75 0 0 0-1.449-.39Zm1.23-3.723a.75.75 0 0 0 .219-.53V2.929a.75.75 0 0 0-1.5 0v2.431l-.31-.31A7 7 0 0 0 3.239 8.188a.75.75 0 1 0 1.448.389A5.5 5.5 0 0 1 13.89 6.11l.311.31h-2.432a.75.75 0 0 0 0 1.5h4.243a.75.75 0 0 0 .53-.219Z" clipRule="evenodd" />
+                  </svg>
+                  {generandoSku ? "Generando..." : "Generar SKU"}
+                </button>
+                <span className="ml-2 text-xs text-gray-400">(automático, ELE_PER_####)</span>
+              </div>
             </div>
 
             <div>
