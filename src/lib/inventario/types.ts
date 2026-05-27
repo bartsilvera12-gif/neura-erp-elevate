@@ -60,6 +60,9 @@ export interface Producto {
   /** Fase Presentaciones: si true, el producto se vende por ml y la web
    *  obliga a elegir una presentación. */
   tiene_presentaciones?: boolean;
+  /** Fase Decants: si true, este producto puede entregarse como obsequio
+   *  sin cargo en una venta del ERP. */
+  es_decant?: boolean;
 }
 
 /** Fase Presentaciones: cada presentación por ml de un producto. */

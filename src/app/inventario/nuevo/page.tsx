@@ -38,6 +38,7 @@ export default function NuevoProductoPage() {
     stock_minimo: "",
     unidad_medida: DEFAULT_UNIDAD_MEDIDA as string,
     metodo_valuacion: "CPP" as MetodoValuacion,
+    es_decant: false,
   });
   const [submitting, setSubmitting] = useState(false);
   const [generandoCodigo, setGenerandoCodigo] = useState(false);
@@ -248,6 +249,7 @@ export default function NuevoProductoPage() {
           stock_minimo: parseInt(form.stock_minimo) || 0,
           unidad_medida: form.unidad_medida.trim().toUpperCase(),
           metodo_valuacion: form.metodo_valuacion,
+          es_decant: form.es_decant === true,
           codigo_barras: codigo,
           codigo_barras_interno: interno,
           categoria_principal_id: categoriaId,
@@ -471,6 +473,29 @@ export default function NuevoProductoPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Es decant / muestra (Fase Decants) */}
+          <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="es_decant"
+                checked={form.es_decant === true}
+                onChange={(e) => setForm((prev) => ({ ...prev, es_decant: e.target.checked }))}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-emerald-900">
+                  Es decant / muestra
+                </span>
+                <span className="block text-xs text-emerald-800/80 mt-0.5">
+                  Usalo para productos pequeños que pueden venderse o entregarse como
+                  obsequio. Si se entrega sin cargo en Ventas, descuenta stock y registra
+                  costo promocional.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Código de barras */}

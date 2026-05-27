@@ -12,6 +12,11 @@ export interface CreateVentaItemInput {
   subtotal: number;
   monto_iva: number;
   total_linea: number;
+  /** Fase Decants: si true, el ítem se entrega como obsequio. Server-side
+   *  valida que el producto tenga es_decant=true y fuerza precios a 0. */
+  es_sin_cargo?: boolean;
+  /** Motivo cuando es_sin_cargo=true (ej. "decant_obsequio"). */
+  motivo_sin_cargo?: string | null;
 }
 
 export interface CreateVentaPgParams {
@@ -39,6 +44,9 @@ function recalcTotals(items: CreateVentaItemInput[]) {
   let montoIva = 0;
   let total = 0;
   for (const it of items) {
+    // Las líneas marcadas sin_cargo aportan 0 al recálculo (server-side las
+    // forzaremos a 0 más adelante; acá ya no se confía en sus valores).
+    if (it.es_sin_cargo === true) continue;
     subtotal += it.subtotal;
     montoIva += it.monto_iva;
     total += it.total_linea;
@@ -102,7 +110,7 @@ export async function createVentaTransaccionalPg(
 
     const ids = [...qtyByProduct.keys()];
     const lockSql = `
-      SELECT id, stock_actual, costo_promedio, nombre, sku
+      SELECT id, stock_actual, costo_promedio, nombre, sku, es_decant
       FROM ${prodT}
       WHERE empresa_id = $1 AND id = ANY($2::uuid[])
       FOR UPDATE
@@ -113,6 +121,7 @@ export async function createVentaTransaccionalPg(
       costo_promedio: string;
       nombre: string;
       sku: string;
+      es_decant: boolean;
     }>(lockSql, [params.empresaId, ids]);
 
     if (locked.rows.length !== ids.length) {
@@ -121,7 +130,7 @@ export async function createVentaTransaccionalPg(
 
     const stockMap = new Map<
       string,
-      { stock: number; costo: number; nombre: string; sku: string }
+      { stock: number; costo: number; nombre: string; sku: string; esDecant: boolean }
     >();
     for (const row of locked.rows) {
       stockMap.set(row.id, {
@@ -129,7 +138,21 @@ export async function createVentaTransaccionalPg(
         costo: Number(row.costo_promedio),
         nombre: row.nombre,
         sku: row.sku,
+        esDecant: row.es_decant === true,
       });
+    }
+
+    // Validación Fase Decants: rechazar items sin_cargo cuyo producto no es decant.
+    for (const it of items) {
+      if (it.es_sin_cargo === true) {
+        const p = stockMap.get(it.producto_id);
+        if (!p) continue; // el chequeo de existencia ya falló arriba
+        if (!p.esDecant) {
+          throw new Error(
+            `"${p.nombre}" no es un decant. Solo los productos marcados como decant pueden entregarse sin cargo.`
+          );
+        }
+      }
     }
 
     for (const [pid, need] of qtyByProduct) {
@@ -191,16 +214,37 @@ export async function createVentaTransaccionalPg(
 
     for (const line of items) {
       const p = stockMap.get(line.producto_id)!;
+      const esSinCargo = line.es_sin_cargo === true;
+
+      // Cálculos efectivos server-side (no se confía en el cliente para items
+      // sin_cargo: se fuerzan precios y se calcula costo promocional).
+      const precioVentaOriginal = esSinCargo ? 0 : line.precio_venta_original;
+      const precioVenta = esSinCargo ? 0 : line.precio_venta;
+      const subtotal = esSinCargo ? 0 : line.subtotal;
+      const montoIva = esSinCargo ? 0 : line.monto_iva;
+      const totalLinea = esSinCargo ? 0 : line.total_linea;
+      const motivo = esSinCargo
+        ? (typeof line.motivo_sin_cargo === "string" && line.motivo_sin_cargo.trim()
+            ? line.motivo_sin_cargo.trim().slice(0, 120)
+            : "decant_obsequio")
+        : null;
+      const costoSnapshot = esSinCargo ? p.costo : null;
+      const costoPromocionalTotal = esSinCargo ? p.costo * line.cantidad : null;
+      const origenMov = esSinCargo ? "venta_regalo" : "venta";
+      const referenciaMov = esSinCargo ? `${numeroControl}-REGALO` : numeroControl;
+
       await client.query(
         `
         INSERT INTO ${itemsT} (
           empresa_id, venta_id, producto_id, producto_nombre, sku,
           cantidad, precio_venta_original, precio_venta, tipo_iva,
-          subtotal, monto_iva, total_linea
+          subtotal, monto_iva, total_linea,
+          es_sin_cargo, motivo_sin_cargo, costo_unitario_snapshot, costo_promocional_total
         ) VALUES (
           $1, $2, $3, $4, $5,
           $6, $7, $8, $9,
-          $10, $11, $12
+          $10, $11, $12,
+          $13, $14, $15, $16
         )
         `,
         [
@@ -210,12 +254,16 @@ export async function createVentaTransaccionalPg(
           line.producto_nombre,
           line.sku,
           line.cantidad,
-          line.precio_venta_original,
-          line.precio_venta,
-          line.tipo_iva,
-          line.subtotal,
-          line.monto_iva,
-          line.total_linea,
+          precioVentaOriginal,
+          precioVenta,
+          esSinCargo ? "EXENTA" : line.tipo_iva,
+          subtotal,
+          montoIva,
+          totalLinea,
+          esSinCargo,
+          motivo,
+          costoSnapshot,
+          costoPromocionalTotal,
         ]
       );
 
@@ -233,7 +281,7 @@ export async function createVentaTransaccionalPg(
           tipo, cantidad, costo_unitario, origen, referencia, fecha, venta_id
         ) VALUES (
           $1, $2, $3, $4,
-          'SALIDA', $5, $6, 'venta', $7, $8::timestamptz, $9
+          'SALIDA', $5, $6, $7, $8, $9::timestamptz, $10
         )
         `,
         [
@@ -243,7 +291,8 @@ export async function createVentaTransaccionalPg(
           line.sku,
           line.cantidad,
           p.costo,
-          numeroControl,
+          origenMov,
+          referenciaMov,
           fechaIso,
           ventaId,
         ]

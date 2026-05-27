@@ -172,14 +172,17 @@ export default function NuevaVentaPage() {
    * por el form inline. Mantiene el modal abierto si todo OK.
    */
   function handleAgregarDesdePicker(payload: AgregarVentaPayload): boolean {
-    const { producto: p, cantidad, precio_input, iva } = payload;
-    // Validar tipo de cambio si moneda=USD
-    if (moneda === "USD" && (tipoCambioNum <= 0)) {
+    const { producto: p, cantidad, precio_input, iva, es_sin_cargo, motivo_sin_cargo } = payload;
+    const sinCargo = es_sin_cargo === true;
+    // Validar tipo de cambio si moneda=USD (no aplica si es regalo, precio=0)
+    if (!sinCargo && moneda === "USD" && (tipoCambioNum <= 0)) {
       setErrorVenta("Cargá el tipo de cambio antes de agregar productos en USD.");
       return false;
     }
     // Convertir precio a PYG
-    const precioPyg = moneda === "USD" ? precio_input * tipoCambioNum : precio_input;
+    const precioPyg = sinCargo
+      ? 0
+      : moneda === "USD" ? precio_input * tipoCambioNum : precio_input;
     // Verificar stock vs lo ya cargado
     const yaEnCarrito = items.filter((i) => i.producto_id === p.id).reduce((s, i) => s + i.cantidad, 0);
     const disp = p.stock_actual - yaEnCarrito;
@@ -189,9 +192,9 @@ export default function NuevaVentaPage() {
     }
     // Precio ingresado YA incluye IVA (regla Elevate). total = precio*cantidad,
     // monto_iva es el componente IVA dentro del total y subtotal = base imponible.
-    const totalLinea = cantidad * precioPyg;
-    const montoIva = ivaIncluido(iva, totalLinea);
-    const subtotal = totalLinea - montoIva;
+    const totalLinea = sinCargo ? 0 : cantidad * precioPyg;
+    const montoIva = sinCargo ? 0 : ivaIncluido(iva, totalLinea);
+    const subtotal = sinCargo ? 0 : totalLinea - montoIva;
 
     // Asegurar que el producto este en el array local (para que stock_actual
     // se conozca en validaciones posteriores del form inline).
@@ -205,12 +208,14 @@ export default function NuevaVentaPage() {
         producto_nombre: p.nombre,
         sku: p.sku,
         cantidad,
-        precio_venta_original: precio_input,
+        precio_venta_original: sinCargo ? 0 : precio_input,
         precio_venta: precioPyg,
-        tipo_iva: iva,
+        tipo_iva: sinCargo ? "EXENTA" : iva,
         subtotal,
         monto_iva: montoIva,
         total_linea: totalLinea,
+        es_sin_cargo: sinCargo,
+        motivo_sin_cargo: sinCargo ? (motivo_sin_cargo ?? "decant_obsequio") : null,
       },
     ]);
     setErrorVenta(null);
@@ -702,6 +707,11 @@ export default function NuevaVentaPage() {
                       <tr key={idx} className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors">
                         <td className="py-3 pr-3 font-medium text-gray-800">
                           {item.producto_nombre}
+                          {item.es_sin_cargo === true && (
+                            <span className="ml-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700 border border-emerald-200">
+                              Obsequio
+                            </span>
+                          )}
                         </td>
                         <td className="py-3 pr-3 font-mono text-xs text-gray-500">
                           {item.sku}

@@ -17,6 +17,14 @@ function asItems(body: unknown): CreateVentaItemInput[] | null {
     const r = x as Record<string, unknown>;
     const tipoIva = r.tipo_iva;
     if (tipoIva !== "EXENTA" && tipoIva !== "5%" && tipoIva !== "10%") return null;
+    const esSinCargo = r.es_sin_cargo === true;
+    const motivoRaw = r.motivo_sin_cargo;
+    const motivoSinCargo =
+      esSinCargo
+        ? (typeof motivoRaw === "string" && motivoRaw.trim()
+            ? motivoRaw.trim().slice(0, 120)
+            : "decant_obsequio")
+        : null;
     out.push({
       producto_id: String(r.producto_id ?? ""),
       producto_nombre: String(r.producto_nombre ?? ""),
@@ -28,9 +36,24 @@ function asItems(body: unknown): CreateVentaItemInput[] | null {
       subtotal: Number(r.subtotal),
       monto_iva: Number(r.monto_iva),
       total_linea: Number(r.total_linea),
+      es_sin_cargo: esSinCargo,
+      motivo_sin_cargo: motivoSinCargo,
     });
   }
   if (out.some((i) => !i.producto_id || !(i.cantidad > 0))) return null;
+  // Normalización: para ítems sin_cargo forzamos precios a 0 antes de la
+  // validación de totales, así el recálculo declarado vs server coincide
+  // sin depender de lo que mande el cliente.
+  for (const it of out) {
+    if (it.es_sin_cargo === true) {
+      it.precio_venta_original = 0;
+      it.precio_venta = 0;
+      it.subtotal = 0;
+      it.monto_iva = 0;
+      it.total_linea = 0;
+      it.tipo_iva = "EXENTA";
+    }
+  }
   return out;
 }
 
@@ -60,6 +83,8 @@ function toVentaResponse(
     subtotal: i.subtotal,
     monto_iva: i.monto_iva,
     total_linea: i.total_linea,
+    es_sin_cargo: i.es_sin_cargo === true,
+    motivo_sin_cargo: i.motivo_sin_cargo ?? null,
   }));
   return {
     id: meta.id,

@@ -14,6 +14,13 @@ export interface LineaVenta {
   subtotal:              number;  // precio_venta × cantidad
   monto_iva:             number;
   total_linea:           number;  // subtotal + monto_iva
+  /** Fase Decants: ítem entregado como obsequio (decant). Precios = 0,
+   *  no infla total de la venta, descuenta stock igual. */
+  es_sin_cargo?:         boolean;
+  motivo_sin_cargo?:     string | null;
+  /** Costo total promocional (cantidad × costo_promedio snapshot) cuando
+   *  es_sin_cargo=true. Server-side only; el cliente puede leerlo para métricas. */
+  costo_promocional_total?: number | null;
 }
 
 /** Cabecera de venta: condiciones comerciales + totales consolidados. */

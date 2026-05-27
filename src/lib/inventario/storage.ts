@@ -44,6 +44,7 @@ interface ProductoRow {
   cantidad_minima_mayorista?: number | null;
   visible_mayorista_web?: boolean | null;
   tiene_presentaciones?: boolean | null;
+  es_decant?: boolean | null;
   /* Catálogo enriquecido (Fase 1 catálogo) — el endpoint singular los devuelve
    * desde el fix 519d10f; faltaba que el mapper los pasara al form. */
   precio_oferta?: number | null;
@@ -114,6 +115,7 @@ function rowToProducto(row: ProductoRow): Producto {
       row.cantidad_minima_mayorista == null ? null : Number(row.cantidad_minima_mayorista),
     visible_mayorista_web: row.visible_mayorista_web === true,
     tiene_presentaciones: row.tiene_presentaciones === true,
+    es_decant: row.es_decant === true,
     // Fix: estos campos venían del backend pero el mapper los descartaba,
     // dejando el form de edición vacío aunque la DB y el endpoint los traían.
     precio_oferta: row.precio_oferta == null ? null : Number(row.precio_oferta),
@@ -323,6 +325,7 @@ export async function updateProducto(
     body.cantidad_minima_mayorista = datos.cantidad_minima_mayorista ?? null;
   if (datos.visible_mayorista_web !== undefined)
     body.visible_mayorista_web = datos.visible_mayorista_web === true;
+  if (datos.es_decant !== undefined) body.es_decant = datos.es_decant === true;
   // Catálogo enriquecido
   if (datos.precio_oferta !== undefined) body.precio_oferta = datos.precio_oferta ?? null;
   if (datos.oferta_hasta !== undefined) body.oferta_hasta = datos.oferta_hasta ?? null;

@@ -25,7 +25,7 @@ const PRODUCTO_COLS_PRIV =
   // con los campos del catálogo web / promo vacíos aunque estuvieran guardados
   // en DB (el PATCH sí los persistía; solo el GET no los traía de vuelta).
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
-  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones";
+  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones,es_decant";
 
 type ProductoRow = Record<string, unknown> & { id?: string };
 
@@ -188,6 +188,9 @@ export async function PATCH(
     }
     if (body.marca !== undefined) {
       patch.marca = typeof body.marca === "string" ? body.marca.trim() || null : null;
+    }
+    if (body.es_decant !== undefined) {
+      patch.es_decant = body.es_decant === true;
     }
     if (body.marca_id !== undefined) {
       const v = body.marca_id == null ? null : String(body.marca_id);

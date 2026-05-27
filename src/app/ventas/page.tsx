@@ -57,11 +57,28 @@ function esDeHoy(iso: string): boolean {
   }
 }
 
+function esDelMes(iso: string): boolean {
+  try {
+    const fecha = new Date(iso);
+    const hoy   = new Date();
+    return (
+      fecha.getFullYear() === hoy.getFullYear() &&
+      fecha.getMonth()    === hoy.getMonth()
+    );
+  } catch {
+    return false;
+  }
+}
+
 interface MetricasHoy {
   facturacion:       number;
   cantidadVentas:    number;
   ticketPromedio:    number;
   productosVendidos: number;  // suma de todas las cantidades en todos los ítems
+  /** Costo promocional acumulado del mes — suma de costo_promocional_total
+   *  en ventas_items con es_sin_cargo=true en ventas del mes actual. */
+  costoPromocionalMes: number;
+  obsequiosMes: number;
 }
 
 function calcularMetricas(ventas: Venta[]): MetricasHoy {
@@ -73,7 +90,20 @@ function calcularMetricas(ventas: Venta[]): MetricasHoy {
     (s, v) => s + v.items.reduce((si, i) => si + i.cantidad, 0),
     0
   );
-  return { facturacion, cantidadVentas, ticketPromedio, productosVendidos };
+  // Costo promocional del mes y conteo de obsequios
+  let costoPromocionalMes = 0;
+  let obsequiosMes = 0;
+  for (const v of ventas) {
+    if (!esDelMes(v.fecha)) continue;
+    for (const it of v.items) {
+      if (it.es_sin_cargo === true) {
+        obsequiosMes += it.cantidad;
+        const c = typeof it.costo_promocional_total === "number" ? it.costo_promocional_total : 0;
+        costoPromocionalMes += c;
+      }
+    }
+  }
+  return { facturacion, cantidadVentas, ticketPromedio, productosVendidos, costoPromocionalMes, obsequiosMes };
 }
 
 // ── Tarjeta métrica ───────────────────────────────────────────────────────────
@@ -225,6 +255,19 @@ export default function VentasPage() {
             label="Unidades vendidas"
             value={String(metricas.productosVendidos)}
             sub="Unidades despachadas"
+          />
+        </div>
+
+        {/* Costo promocional del mes — métrica de obsequios (decants) */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <MetricCard
+            label="Costo promocional del mes"
+            value={`Gs. ${Math.round(metricas.costoPromocionalMes).toLocaleString("es-PY")}`}
+            sub={
+              metricas.obsequiosMes > 0
+                ? `${metricas.obsequiosMes} obsequio${metricas.obsequiosMes === 1 ? "" : "s"} entregado${metricas.obsequiosMes === 1 ? "" : "s"} este mes`
+                : "Sin obsequios este mes"
+            }
           />
         </div>
       </div>

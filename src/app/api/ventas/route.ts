@@ -31,6 +31,9 @@ interface VentaItemRow {
   subtotal: number | string;
   monto_iva: number | string;
   total_linea: number | string;
+  es_sin_cargo: boolean | null;
+  motivo_sin_cargo: string | null;
+  costo_promocional_total: number | string | null;
 }
 
 function num(v: number | string): number {
@@ -49,6 +52,10 @@ function mapItems(rows: VentaItemRow[]): LineaVenta[] {
     subtotal: num(r.subtotal),
     monto_iva: num(r.monto_iva),
     total_linea: num(r.total_linea),
+    es_sin_cargo: r.es_sin_cargo === true,
+    motivo_sin_cargo: r.motivo_sin_cargo ?? null,
+    costo_promocional_total:
+      r.costo_promocional_total == null ? null : num(r.costo_promocional_total),
   }));
 }
 
@@ -57,7 +64,7 @@ function mapItems(rows: VentaItemRow[]): LineaVenta[] {
  * secuenciales (ventas + items) y join en app, igual contrato que antes.
  */
 const VENTAS_COLS = "id,empresa_id,numero_control,moneda,tipo_cambio,subtotal,monto_iva,total,tipo_venta,plazo_dias,fecha";
-const VENTAS_ITEMS_COLS = "venta_id,producto_id,producto_nombre,sku,cantidad,precio_venta_original,precio_venta,tipo_iva,subtotal,monto_iva,total_linea";
+const VENTAS_ITEMS_COLS = "venta_id,producto_id,producto_nombre,sku,cantidad,precio_venta_original,precio_venta,tipo_iva,subtotal,monto_iva,total_linea,es_sin_cargo,motivo_sin_cargo,costo_promocional_total";
 
 export async function GET(request: NextRequest) {
   try {

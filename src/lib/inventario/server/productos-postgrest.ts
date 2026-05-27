@@ -28,7 +28,7 @@ const RETURNING_COLS =
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
   "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
-  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones";
+  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones,es_decant";
 
 function classify23505(err: { code?: string; message?: string; detail?: string }): DuplicadoError {
   const txt = [err.message, err.detail].filter(Boolean).join(" ");
@@ -121,6 +121,7 @@ export async function insertProductoPostgrest(
     proximamente: d.proximamente ?? false,
     orden_web: d.orden_web ?? null,
     familia_olfativa_id: d.familia_olfativa_id ?? null,
+    es_decant: d.es_decant === true,
   };
   const r = await postgrestRequest<ProductoRow>("productos", `select=${RETURNING_COLS}`, {
     method: "POST",
@@ -156,6 +157,7 @@ export async function updateProductoPostgrest(
     "precio_oferta", "oferta_hasta", "nuevo_hasta", "concentracion", "volumen_ml",
     "genero", "proximamente", "orden_web", "familia_olfativa_id",
     "tiene_presentaciones",
+    "es_decant",
   ];
   for (const k of keys) {
     if (patch[k] !== undefined) {

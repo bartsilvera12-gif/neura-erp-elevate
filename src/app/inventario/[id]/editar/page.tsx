@@ -43,6 +43,7 @@ export default function EditarProductoPage() {
     stock_minimo: "",
     unidad_medida: "",
     metodo_valuacion: "CPP" as MetodoValuacion,
+    es_decant: false,
   });
   const [imagenPath, setImagenPath] = useState<string | null>(null);
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
@@ -182,6 +183,7 @@ export default function EditarProductoPage() {
         stock_minimo: String(p.stock_minimo),
         unidad_medida: p.unidad_medida,
         metodo_valuacion: p.metodo_valuacion,
+        es_decant: p.es_decant === true,
       });
       setCodigoOriginal(p.codigo_barras ?? null);
       setImagenPath(p.imagen_path ?? null);
@@ -326,6 +328,7 @@ export default function EditarProductoPage() {
         stock_minimo: parseInt(form.stock_minimo) || 0,
         unidad_medida: form.unidad_medida.trim().toUpperCase(),
         metodo_valuacion: form.metodo_valuacion,
+        es_decant: form.es_decant === true,
         categoria_principal_id: categoriaId,
         ubicacion_principal_id: ubicacionId,
         proveedor_principal_id: proveedorId,
@@ -521,6 +524,29 @@ export default function EditarProductoPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Es decant / muestra (Fase Decants) */}
+          <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="es_decant"
+                checked={form.es_decant === true}
+                onChange={(e) => setForm((prev) => ({ ...prev, es_decant: e.target.checked }))}
+                className="mt-0.5 h-4 w-4"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-emerald-900">
+                  Es decant / muestra
+                </span>
+                <span className="block text-xs text-emerald-800/80 mt-0.5">
+                  Usalo para productos pequeños que pueden venderse o entregarse como
+                  obsequio. Si se entrega sin cargo en Ventas, descuenta stock y registra
+                  costo promocional.
+                </span>
+              </span>
+            </label>
           </div>
 
           {/* Código de barras */}

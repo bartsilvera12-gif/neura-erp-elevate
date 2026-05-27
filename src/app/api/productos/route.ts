@@ -24,7 +24,7 @@ const PRODUCTOS_COLS_PRIV =
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
   "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
-  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones";
+  "proximamente,orden_web,familia_olfativa_id,tiene_presentaciones,es_decant";
 
 /**
  * GET /api/productos — lista de productos activos.
@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
     const proximamente = body.proximamente === true;
     const ordenWeb = num(body.orden_web);
     const familiaOlfativaId = str(body.familia_olfativa_id);
+    const esDecant = body.es_decant === true;
 
     try {
       const row = await insertProductoPostgrest(jwt, empresaId, {
@@ -219,6 +220,7 @@ export async function POST(request: NextRequest) {
         proximamente,
         orden_web: ordenWeb == null ? null : Math.floor(ordenWeb),
         familia_olfativa_id: familiaOlfativaId,
+        es_decant: esDecant,
       });
 
       // Inventario inicial (mismo schema, via PG directo).

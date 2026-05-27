@@ -27,6 +27,8 @@ export interface ProductoPickerItem {
   proveedor_nombre: string | null;
   ubicacion_nombre: string | null;
   ubicacion_tipo: string | null;
+  /** Fase Decants: si true el producto puede entregarse como obsequio en ventas. */
+  es_decant?: boolean;
 }
 
 /** True si el producto tiene oferta cargada y vigente. */
@@ -56,6 +58,9 @@ export interface AgregarVentaPayload {
   cantidad: number;
   precio_input: number;
   iva: "EXENTA" | "5%" | "10%";
+  /** Fase Decants: true si el ítem se entrega como obsequio (sin cargo). */
+  es_sin_cargo?: boolean;
+  motivo_sin_cargo?: string | null;
 }
 
 interface Props {
@@ -94,6 +99,9 @@ export default function ProductPickerModal({
   const [precio, setPrecio] = useState("");
   const [iva, setIva] = useState<"EXENTA" | "5%" | "10%">(ivaDefault);
   const [feedback, setFeedback] = useState<string | null>(null);
+  /** Fase Decants: para productos con es_decant=true el vendedor elige entre
+   *  Cobrar (precio normal) o Regalar (precio=0, registra costo promocional). */
+  const [modo, setModo] = useState<"cobrar" | "regalar">("cobrar");
 
   useEffect(() => { if (open) { setQ(""); setError(null); setSel(null); setTimeout(() => inputRef.current?.focus(), 50); } }, [open]);
   useEffect(() => {
@@ -142,22 +150,31 @@ export default function ProductPickerModal({
     }
     setIva(ivaDefault);
     setFeedback(null);
+    setModo("cobrar"); // default seguro; el toggle solo se muestra si es_decant
   }
 
   function handleAgregar() {
     if (!sel) return;
     const cantNum = parseInt(cantidad, 10) || 0;
     const precioNum = parseFloat(precio) || 0;
+    const regalar = sel.es_decant === true && modo === "regalar";
     if (cantNum <= 0) { setFeedback("Cantidad debe ser > 0"); return; }
-    if (precioNum <= 0) { setFeedback("Precio debe ser > 0"); return; }
-    if (moneda === "USD" && tipoCambio <= 0) { setFeedback("Falta tipo de cambio en la venta"); return; }
+    if (!regalar && precioNum <= 0) { setFeedback("Precio debe ser > 0"); return; }
+    if (!regalar && moneda === "USD" && tipoCambio <= 0) { setFeedback("Falta tipo de cambio en la venta"); return; }
     const enCarrito = excludeIds.filter((id) => id === sel.id).length;
     const disp = sel.stock_actual - enCarrito;
     if (cantNum > disp) {
       setFeedback(`Stock insuficiente (disponible ${disp})`);
       return;
     }
-    const ok = onAgregar({ producto: sel, cantidad: cantNum, precio_input: precioNum, iva });
+    const ok = onAgregar({
+      producto: sel,
+      cantidad: cantNum,
+      precio_input: regalar ? 0 : precioNum,
+      iva: regalar ? "EXENTA" : iva,
+      es_sin_cargo: regalar,
+      motivo_sin_cargo: regalar ? "decant_obsequio" : null,
+    });
     if (ok !== false) {
       setFeedback("Producto agregado ✓");
       setCantidad("1");
@@ -170,14 +187,22 @@ export default function ProductPickerModal({
   if (!open) return null;
   const enCarritoSel = sel ? excludeIds.filter((id) => id === sel.id).length : 0;
   const dispSel = sel ? sel.stock_actual - enCarritoSel : 0;
-  const precioGsEquiv = moneda === "USD" ? (parseFloat(precio) || 0) * (tipoCambio || 0) : (parseFloat(precio) || 0);
+  const esRegalar = sel?.es_decant === true && modo === "regalar";
+  const precioGsEquiv = esRegalar
+    ? 0
+    : moneda === "USD"
+      ? (parseFloat(precio) || 0) * (tipoCambio || 0)
+      : (parseFloat(precio) || 0);
   // Regla Elevate: precio cargado YA incluye IVA. Total línea = precio × cantidad;
   // IVA es componente interno; subtotal (base) = total − IVA.
   const totalLineaPicker = (parseInt(cantidad, 10) || 0) * precioGsEquiv;
-  const ivaMonto = iva === "EXENTA" || totalLineaPicker <= 0
+  const ivaMonto = esRegalar || iva === "EXENTA" || totalLineaPicker <= 0
     ? 0
     : totalLineaPicker - totalLineaPicker / (1 + (iva === "5%" ? 0.05 : 0.10));
   const subtotal = totalLineaPicker - ivaMonto;
+  const costoPromocional = esRegalar && sel
+    ? Number(sel.costo_promedio ?? 0) * (parseInt(cantidad, 10) || 0)
+    : 0;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm pt-12 px-4" onClick={onClose}>
@@ -324,6 +349,41 @@ export default function ProductPickerModal({
                 )}
 
                 <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                  {sel.es_decant === true && (
+                    <div className="space-y-1">
+                      <label className="block text-[11px] uppercase text-slate-400">
+                        Modo (decant)
+                      </label>
+                      <div className="flex border border-emerald-200 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setModo("cobrar")}
+                          className={`flex-1 py-1.5 text-xs font-medium ${
+                            modo === "cobrar" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700 hover:bg-emerald-50"
+                          }`}
+                        >
+                          Cobrar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModo("regalar")}
+                          className={`flex-1 py-1.5 text-xs font-medium ${
+                            modo === "regalar" ? "bg-emerald-600 text-white" : "bg-white text-emerald-700 hover:bg-emerald-50"
+                          }`}
+                        >
+                          Regalar
+                        </button>
+                      </div>
+                      {esRegalar && (
+                        <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-1.5 leading-snug">
+                          Obsequio: precio 0, no infla el total. Descuenta stock y
+                          registra costo promocional estimado{" "}
+                          <strong className="tabular-nums">{formatGs(costoPromocional)}</strong>.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[11px] uppercase text-slate-400 mb-1">Cantidad</label>
@@ -340,11 +400,12 @@ export default function ProductPickerModal({
                       </label>
                       <input
                         type="number" min={0}
-                        value={precio}
+                        value={esRegalar ? "0" : precio}
                         onChange={(e) => setPrecio(e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
+                        disabled={esRegalar}
+                        className={`w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm ${esRegalar ? "bg-slate-100 text-slate-400" : ""}`}
                       />
-                      {moneda === "USD" && (parseFloat(precio) || 0) > 0 && (
+                      {!esRegalar && moneda === "USD" && (parseFloat(precio) || 0) > 0 && (
                         <p className="mt-1 text-[11px] text-slate-400">≈ {formatGs(precioGsEquiv)}</p>
                       )}
                     </div>
@@ -352,16 +413,19 @@ export default function ProductPickerModal({
 
                   <div>
                     <label className="block text-[11px] uppercase text-slate-400 mb-1">IVA</label>
-                    <div className="flex border border-slate-200 rounded-lg overflow-hidden">
-                      {(["EXENTA", "5%", "10%"] as const).map((opt) => (
-                        <button
-                          key={opt} type="button"
-                          onClick={() => setIva(opt)}
-                          className={`flex-1 py-1.5 text-xs font-medium ${iva === opt ? "bg-[#0EA5E9] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
-                        >
-                          {opt}
-                        </button>
-                      ))}
+                    <div className={`flex border border-slate-200 rounded-lg overflow-hidden ${esRegalar ? "opacity-50 pointer-events-none" : ""}`}>
+                      {(["EXENTA", "5%", "10%"] as const).map((opt) => {
+                        const active = esRegalar ? opt === "EXENTA" : iva === opt;
+                        return (
+                          <button
+                            key={opt} type="button"
+                            onClick={() => !esRegalar && setIva(opt)}
+                            className={`flex-1 py-1.5 text-xs font-medium ${active ? "bg-[#0EA5E9] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                          >
+                            {opt}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -376,7 +440,7 @@ export default function ProductPickerModal({
                     onClick={handleAgregar}
                     className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold py-2.5 rounded-lg"
                   >
-                    + Agregar a la venta
+                    {esRegalar ? "+ Agregar obsequio" : "+ Agregar a la venta"}
                   </button>
                 </div>
               </div>
