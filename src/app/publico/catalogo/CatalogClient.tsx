@@ -58,22 +58,64 @@ export function CatalogClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat, marcaSlug]);
 
-  // Marcas a mostrar como chips. Si hay categoría seleccionada, restringimos
-  // a las marcas que tienen al menos un producto en esa categoría.
-  const marcasDisponibles: MarcaWeb[] = useMemo(() => {
-    if (cat === "Todos") return marcas;
-    const slugsConProducto = new Set<string>();
-    for (const p of products) {
-      if (p.category === cat && p.marca_slug) slugsConProducto.add(p.marca_slug);
+  // Marcas a mostrar como chips. Fase Categorías↔Marcas:
+  //   - "Todos": usamos las marcas globales que llegaron por prop (SSR).
+  //   - Categoría seleccionada: consultamos al endpoint público
+  //     /api/public/elevate/marcas?categoria=<slug> que prioriza la relación
+  //     formal `marca_categorias`. Eso significa que el chip aparece aunque
+  //     la marca todavía no tenga productos visibles (caso de carga inicial
+  //     de marcas desde el ERP). Si el cliente filtra por esa marca y aún
+  //     no hay productos, el catálogo muestra "sin resultados" — UX OK.
+  const [marcasCat, setMarcasCat] = useState<MarcaWeb[] | null>(null);
+  const [marcasLoading, setMarcasLoading] = useState(false);
+  useEffect(() => {
+    if (cat === "Todos") {
+      setMarcasCat(null);
+      setMarcasLoading(false);
+      return;
     }
-    return marcas.filter((m) => m.slug && slugsConProducto.has(m.slug));
-  }, [marcas, products, cat]);
+    const catObj = categorias.find((c) => c.nombre === cat);
+    const slug = catObj?.slug;
+    if (!slug) {
+      setMarcasCat([]);
+      setMarcasLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setMarcasLoading(true);
+    fetch(`/api/public/elevate/marcas?categoria=${encodeURIComponent(slug)}`, {
+      cache: "no-store",
+    })
+      .then(async (r) => {
+        if (!r.ok) return [] as MarcaWeb[];
+        const j = (await r.json().catch(() => null)) as { marcas?: MarcaWeb[] } | null;
+        return Array.isArray(j?.marcas) ? (j!.marcas as MarcaWeb[]) : [];
+      })
+      .then((list) => {
+        if (!cancelled) setMarcasCat(list);
+      })
+      .catch(() => {
+        if (!cancelled) setMarcasCat([]);
+      })
+      .finally(() => {
+        if (!cancelled) setMarcasLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cat, categorias]);
+
+  const marcasDisponibles: MarcaWeb[] = cat === "Todos" ? marcas : marcasCat ?? [];
 
   // Si el usuario cambia de categoría y la marca activa ya no aplica, se limpia.
   useEffect(() => {
     if (!marcaSlug) return;
-    if (!marcasDisponibles.some((m) => m.slug === marcaSlug)) setMarcaSlug(null);
-  }, [marcasDisponibles, marcaSlug]);
+    if (cat === "Todos") return; // "Todos" no filtra por marca de categoría
+    if (marcasLoading) return; // esperar a que termine el fetch antes de descartar
+    if (marcasCat && !marcasCat.some((m) => m.slug === marcaSlug)) {
+      setMarcaSlug(null);
+    }
+  }, [marcaSlug, cat, marcasCat, marcasLoading]);
 
   const list = useMemo(() => {
     const q = norm(query.trim());
