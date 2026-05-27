@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Minus, Plus, ChevronLeft, ShoppingBag, MessageCircle } from "lucide-react";
+import { Minus, Plus, ChevronLeft, ChevronRight, ShoppingBag, MessageCircle } from "lucide-react";
 import { type Product, formatPrice, products } from "@/lib/elevate-public/products-mock";
 import { buildProductWhatsappLink } from "@/lib/elevate-public/whatsapp";
 import { trackProductEvent } from "@/lib/elevate-public/track";
@@ -159,62 +159,74 @@ export function ProductDetailClient({
           </button>
 
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
-            <div className="space-y-3">
-              <div className="relative bg-cream overflow-hidden shadow-elegant">
-                <div className="aspect-[4/5] relative">
+            <div className="relative bg-cream overflow-hidden shadow-elegant group">
+              <div className="aspect-[4/5] relative">
+                {/* Fase Galería: capas apiladas con fade. Solo la imagen
+                    activa es opaca; las demás quedan invisibles pero
+                    cargadas, permitiendo cambio instantáneo y suave. */}
+                {galleryImages.map((img, idx) => (
                   <Image
-                    src={activeImage}
-                    alt={
-                      galleryImages[activeImageIdx]?.alt ??
-                      `${product.name} de ${product.brand}`
-                    }
+                    key={`${img.url}-${idx}`}
+                    src={img.url}
+                    alt={img.alt ?? `${product.name} de ${product.brand}`}
                     fill
                     sizes="(min-width:1024px) 50vw, 100vw"
-                    priority
-                    className="object-cover"
+                    priority={idx === 0}
+                    className={`object-cover transition-opacity duration-500 ease-in-out motion-reduce:transition-none ${
+                      idx === activeImageIdx ? "opacity-100" : "opacity-0"
+                    }`}
                     // unoptimized: imagen pública del bucket Storage. Evita
                     // /_next/image y libera CPU del Node de Hostinger.
                     unoptimized
                   />
-                </div>
-                {product.promo && (
-                  <span className="absolute top-6 left-6 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
-                    {product.promo}
-                  </span>
-                )}
-                {product.isNew && !product.promo && (
-                  <span className="absolute top-6 left-6 bg-gold text-gold-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
-                    Nuevo
-                  </span>
-                )}
+                ))}
               </div>
+              {product.promo && (
+                <span className="absolute top-6 left-6 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5 z-10">
+                  {product.promo}
+                </span>
+              )}
+              {product.isNew && !product.promo && (
+                <span className="absolute top-6 left-6 bg-gold text-gold-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5 z-10">
+                  Nuevo
+                </span>
+              )}
 
-              {/* Thumbnails (Fase Galería). Solo aparecen si hay >1 imagen. */}
+              {/* Flechas overlay (solo si hay >1 imagen). Semitransparentes,
+                  centradas verticalmente, ganan opacidad en hover. En mobile
+                  son siempre visibles para descubrir la funcionalidad. */}
               {galleryImages.length > 1 && (
-                <div className="grid grid-cols-5 gap-2">
-                  {galleryImages.map((img, idx) => (
-                    <button
-                      key={`${img.url}-${idx}`}
-                      type="button"
-                      onClick={() => setActiveImageIdx(idx)}
-                      aria-label={`Ver imagen ${idx + 1}`}
-                      aria-pressed={idx === activeImageIdx}
-                      className={`relative aspect-square overflow-hidden border transition-elegant ${
-                        idx === activeImageIdx
-                          ? "border-gold ring-1 ring-gold"
-                          : "border-border hover:border-gold/60"
-                      }`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={img.url}
-                        alt={img.alt ?? `${product.name} ${idx + 1}`}
-                        className="absolute inset-0 h-full w-full object-cover"
-                        loading={idx === 0 ? "eager" : "lazy"}
-                      />
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveImageIdx(
+                        (i) => (i - 1 + galleryImages.length) % galleryImages.length
+                      )
+                    }
+                    aria-label="Imagen anterior"
+                    className="absolute top-1/2 left-3 -translate-y-1/2 z-10 inline-flex items-center justify-center w-10 h-10 rounded-full bg-background/40 hover:bg-background/80 text-primary backdrop-blur-sm transition-elegant lg:opacity-0 lg:group-hover:opacity-100 motion-reduce:transition-none"
+                  >
+                    <ChevronLeft size={20} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveImageIdx((i) => (i + 1) % galleryImages.length)
+                    }
+                    aria-label="Imagen siguiente"
+                    className="absolute top-1/2 right-3 -translate-y-1/2 z-10 inline-flex items-center justify-center w-10 h-10 rounded-full bg-background/40 hover:bg-background/80 text-primary backdrop-blur-sm transition-elegant lg:opacity-0 lg:group-hover:opacity-100 motion-reduce:transition-none"
+                  >
+                    <ChevronRight size={20} aria-hidden="true" />
+                  </button>
+                  {/* Indicador discreto N/M abajo a la derecha. */}
+                  <span
+                    className="absolute bottom-3 right-3 z-10 text-[10px] tracking-[0.2em] uppercase text-primary bg-background/70 backdrop-blur-sm px-2 py-1"
+                    aria-live="polite"
+                  >
+                    {activeImageIdx + 1} / {galleryImages.length}
+                  </span>
+                </>
               )}
             </div>
 

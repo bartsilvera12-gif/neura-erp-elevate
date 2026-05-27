@@ -112,23 +112,22 @@
   box-shadow: 0 8px 30px -12px hsl(39 59% 37% / 0.4);
 }
 
-/* Animación de rotación de Bestsellers */
+/* Animación de Bestsellers — fade suave (rediseñado).
+ * Antes usaba rotateX(-12deg) + scale + blur, lo que se sentía brusco al
+ * cambiar de productos. Ahora es un fade in con un translate sutil:
+ * suave, elegante y sin distorsión. Respeta prefers-reduced-motion abajo. */
 @keyframes elevate-bestseller-rotate-in {
   0% {
     opacity: 0;
-    transform: translateY(30px) rotateX(-12deg) scale(0.95);
-    filter: blur(6px);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
-    transform: translateY(0) rotateX(0) scale(1);
-    filter: blur(0);
+    transform: translateY(0);
   }
 }
 .elevate-public-theme .bestseller-rotate {
-  animation: elevate-bestseller-rotate-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transform-origin: center top;
-  perspective: 1000px;
+  animation: elevate-bestseller-rotate-in 700ms ease-in-out both;
 }
 
 /* Tarjetas promo: float + glow + sheen */
