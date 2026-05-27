@@ -10,7 +10,10 @@ import { WHATSAPP_NUMBER } from "@/lib/elevate-public/products-mock";
  * `NEXT_PUBLIC_ELEVATE_WHATSAPP_NUMBER`. Si no está configurada (string
  * vacío), el item de Phone no se renderiza para no mostrar un link roto.
  */
-const EMAIL = "hola@elevate.com";
+const EMAIL = "elevategroup023@gmail.com";
+const INSTAGRAM_URL = "https://www.instagram.com/elevate_import_export?utm_source=qr";
+const INSTAGRAM_HANDLE = "@elevate_import_export";
+const ADDRESS = "Ciudad del Este - Paraguay";
 
 function formatTel(num: string) {
   // Heurística mínima de formateo. Si no entra, mostrar tal cual.
@@ -20,7 +23,8 @@ function formatTel(num: string) {
 }
 
 export function Footer() {
-  const year = new Date().getFullYear();
+  // Firma legal fija "© 2026 Elevate import Export" (sin year dinámico,
+  // según directiva del cliente).
   const telDisplay = WHATSAPP_NUMBER ? formatTel(WHATSAPP_NUMBER) : "";
   return (
     <footer className="bg-primary text-cream pt-20 pb-8">
@@ -67,18 +71,25 @@ export function Footer() {
               </li>
               <li className="flex items-start gap-3">
                 <MapPin size={14} className="text-gold mt-1 shrink-0" />
-                <span>Buenos Aires, Argentina</span>
+                <span>{ADDRESS}</span>
               </li>
               <li className="flex items-start gap-3">
                 <Instagram size={14} className="text-gold mt-1 shrink-0" />
-                <a href="#" className="hover:text-gold-light transition-smooth">@elevate.parfum</a>
+                <a
+                  href={INSTAGRAM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-gold-light transition-smooth"
+                >
+                  {INSTAGRAM_HANDLE}
+                </a>
               </li>
             </ul>
           </div>
         </div>
 
         <div className="pt-8 flex flex-col md:flex-row justify-between gap-4 text-xs text-cream/50 tracking-wide">
-          <div>© {year} Elevate Maison de Parfum. Todos los derechos reservados.</div>
+          <div>© 2026 Elevate import Export</div>
           <div className="font-editorial italic">Elegancia en cada nota.</div>
         </div>
       </div>
