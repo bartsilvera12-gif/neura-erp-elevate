@@ -46,6 +46,8 @@ export interface Product {
   /** Galería de imágenes (Fase Galería). Ordenadas con principal primero.
    *  Si está vacío, la web usa `image` legacy. */
   gallery?: { url: string; alt: string | null }[];
+  /** Precio mayorista informativo (Fase Mayorista). Null/undefined = no mostrar. */
+  mayorista?: { precio: number; cantidad_minima: number } | null;
 }
 
 const IMG = "/brand/elevate";

@@ -89,6 +89,9 @@ export interface ProductoRow {
   marca: string | null;
   marca_id: string | null;
   precio_web: string | number | null;
+  precio_mayorista: string | number | null;
+  cantidad_minima_mayorista: number | null;
+  visible_mayorista_web: boolean;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta: string | number | null;
   oferta_hasta: string | null;
@@ -124,6 +127,9 @@ export interface InsertProductoInput {
   marca?: string | null;
   marca_id?: string | null;
   precio_web?: number | null;
+  precio_mayorista?: number | null;
+  cantidad_minima_mayorista?: number | null;
+  visible_mayorista_web?: boolean;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;
   oferta_hasta?: string | null;
@@ -142,6 +148,7 @@ const RETURNING = `
   codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
   categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
   slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, marca_id, precio_web,
+  precio_mayorista, cantidad_minima_mayorista, visible_mayorista_web,
   precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
   proximamente, orden_web, familia_olfativa_id
 `;
@@ -161,6 +168,7 @@ export async function insertProducto(
       unidad_medida, metodo_valuacion, codigo_barras, codigo_barras_interno,
       categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
       slug_web, visible_web, destacado_web, descripcion_corta, descripcion_web, marca, marca_id, precio_web,
+      precio_mayorista, cantidad_minima_mayorista, visible_mayorista_web,
       precio_oferta, oferta_hasta, nuevo_hasta, concentracion, volumen_ml, genero,
       proximamente, orden_web, familia_olfativa_id
     ) VALUES (
@@ -168,8 +176,9 @@ export async function insertProducto(
       $8, $9, $10, COALESCE($11::boolean, false),
       $12::uuid, $13::uuid, $14::uuid,
       $15, COALESCE($16::boolean, false), COALESCE($17::boolean, false), $18, $19, $20, $21::uuid, $22::numeric,
-      $23::numeric, $24::timestamptz, $25::date, $26, $27::int, $28,
-      COALESCE($29::boolean, false), $30::int, $31::uuid
+      $23::numeric, $24::int, COALESCE($25::boolean, false),
+      $26::numeric, $27::timestamptz, $28::date, $29, $30::int, $31,
+      COALESCE($32::boolean, false), $33::int, $34::uuid
     )
     RETURNING ${RETURNING}
   `;
@@ -196,6 +205,9 @@ export async function insertProducto(
     d.marca ?? null,
     d.marca_id ?? null,
     d.precio_web ?? null,
+    d.precio_mayorista ?? null,
+    d.cantidad_minima_mayorista ?? null,
+    d.visible_mayorista_web ?? false,
     d.precio_oferta ?? null,
     d.oferta_hasta ?? null,
     d.nuevo_hasta ?? null,
@@ -239,6 +251,9 @@ export interface UpdateProductoInput {
   marca?: string | null;
   marca_id?: string | null;
   precio_web?: number | null;
+  precio_mayorista?: number | null;
+  cantidad_minima_mayorista?: number | null;
+  visible_mayorista_web?: boolean;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;
   oferta_hasta?: string | null;
@@ -300,6 +315,9 @@ export async function updateProductoPg(
   if (patch.marca !== undefined) add("marca", patch.marca || null);
   if (patch.marca_id !== undefined) add("marca_id", patch.marca_id || null, "::uuid");
   if (patch.precio_web !== undefined) add("precio_web", patch.precio_web == null ? null : patch.precio_web, "::numeric");
+  if (patch.precio_mayorista !== undefined) add("precio_mayorista", patch.precio_mayorista == null ? null : patch.precio_mayorista, "::numeric");
+  if (patch.cantidad_minima_mayorista !== undefined) add("cantidad_minima_mayorista", patch.cantidad_minima_mayorista == null ? null : patch.cantidad_minima_mayorista, "::int");
+  if (patch.visible_mayorista_web !== undefined) add("visible_mayorista_web", patch.visible_mayorista_web === true, "::boolean");
   // Catálogo enriquecido
   if (patch.precio_oferta !== undefined) add("precio_oferta", patch.precio_oferta == null ? null : patch.precio_oferta, "::numeric");
   if (patch.oferta_hasta !== undefined) add("oferta_hasta", patch.oferta_hasta || null, "::timestamptz");
@@ -517,6 +535,10 @@ export function rowToProductoApi(r: ProductoRow): Record<string, unknown> {
     marca: r.marca ?? null,
     marca_id: r.marca_id ?? null,
     precio_web: r.precio_web == null ? null : Number(r.precio_web),
+    precio_mayorista: r.precio_mayorista == null ? null : Number(r.precio_mayorista),
+    cantidad_minima_mayorista:
+      r.cantidad_minima_mayorista == null ? null : Number(r.cantidad_minima_mayorista),
+    visible_mayorista_web: r.visible_mayorista_web === true,
     precio_oferta: r.precio_oferta == null ? null : Number(r.precio_oferta),
     oferta_hasta: r.oferta_hasta ?? null,
     nuevo_hasta: r.nuevo_hasta ?? null,

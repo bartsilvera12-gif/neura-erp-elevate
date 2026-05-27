@@ -22,7 +22,7 @@ const PRODUCTOS_COLS_PRIV =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
   "proximamente,orden_web,familia_olfativa_id";
 
@@ -158,6 +158,23 @@ export async function POST(request: NextRequest) {
     const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
     const generoRaw = str(body.genero)?.toLowerCase();
     const genero = generoRaw === "masculino" || generoRaw === "femenino" || generoRaw === "unisex" ? generoRaw : null;
+    // Precio mayorista informativo (Fase Mayorista). Si visible=true, exigimos
+    // que los otros dos campos tengan valores válidos.
+    const mayorPrecioRaw = num(body.precio_mayorista);
+    const mayorPrecio =
+      mayorPrecioRaw == null || mayorPrecioRaw < 0 ? null : mayorPrecioRaw;
+    const mayorMinRaw = num(body.cantidad_minima_mayorista);
+    const mayorMin =
+      mayorMinRaw == null || mayorMinRaw < 1 ? null : Math.floor(mayorMinRaw);
+    const mayorVisible = body.visible_mayorista_web === true;
+    if (mayorVisible && (mayorPrecio == null || mayorPrecio <= 0 || mayorMin == null || mayorMin < 1)) {
+      return NextResponse.json(
+        errorResponse(
+          "Para mostrar el precio mayorista en la web cargá un precio > 0 y una cantidad mínima >= 1."
+        ),
+        { status: 400 }
+      );
+    }
     const precioOferta = num(body.precio_oferta);
     const ofertaHasta = str(body.oferta_hasta);
     const nuevoHasta = str(body.nuevo_hasta);
@@ -190,6 +207,9 @@ export async function POST(request: NextRequest) {
         marca,
         marca_id: marcaId,
         precio_web: precioWeb,
+        precio_mayorista: mayorPrecio,
+        cantidad_minima_mayorista: mayorMin,
+        visible_mayorista_web: mayorVisible,
         precio_oferta: precioOferta,
         oferta_hasta: ofertaHasta,
         nuevo_hasta: nuevoHasta,

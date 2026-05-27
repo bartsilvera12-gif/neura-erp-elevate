@@ -39,6 +39,12 @@ export interface Producto {
   /** FK opcional a elevate.marcas. Coexiste con marca text legacy. */
   marca_id?: string | null;
   precio_web?: number | null;
+  /* Precio mayorista informativo (Fase Mayorista). NO aplica descuento en
+   * checkout — solo se muestra como referencia en la web pública si
+   * visible_mayorista_web=true. */
+  precio_mayorista?: number | null;
+  cantidad_minima_mayorista?: number | null;
+  visible_mayorista_web?: boolean;
   /* Catálogo enriquecido (Fase 1 catálogo) */
   precio_oferta?: number | null;
   oferta_hasta?: string | null;        // ISO timestamptz

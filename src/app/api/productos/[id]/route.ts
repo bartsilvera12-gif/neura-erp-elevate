@@ -20,7 +20,7 @@ const PRODUCTO_COLS_PRIV =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   // Fix: estas columnas faltaban y causaban que el editor reabriera el producto
   // con los campos del catálogo web / promo vacíos aunque estuvieran guardados
   // en DB (el PATCH sí los persistía; solo el GET no los traía de vuelta).
@@ -200,6 +200,51 @@ export async function PATCH(
       const v = body.precio_web;
       if (v === null || v === "") patch.precio_web = null;
       else patch.precio_web = Number.isFinite(Number(v)) ? Number(v) : null;
+    }
+
+    // Precio mayorista informativo (Fase Mayorista). Validación cruzada al
+    // final si visible=true.
+    if (body.precio_mayorista !== undefined) {
+      const v = body.precio_mayorista;
+      if (v === null || v === "") patch.precio_mayorista = null;
+      else {
+        const n = Number(v);
+        patch.precio_mayorista = Number.isFinite(n) && n >= 0 ? n : null;
+      }
+    }
+    if (body.cantidad_minima_mayorista !== undefined) {
+      const v = body.cantidad_minima_mayorista;
+      if (v === null || v === "") patch.cantidad_minima_mayorista = null;
+      else {
+        const n = Number(v);
+        patch.cantidad_minima_mayorista =
+          Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+      }
+    }
+    if (body.visible_mayorista_web !== undefined) {
+      patch.visible_mayorista_web = body.visible_mayorista_web === true;
+    }
+    // Validación cruzada: si quedaría visible=true, exigir precio y cant.
+    if (patch.visible_mayorista_web === true) {
+      // valores efectivos tras el patch
+      const efPrecio =
+        patch.precio_mayorista !== undefined
+          ? patch.precio_mayorista
+          : undefined; // se acepta también si ya está en BD
+      const efMin =
+        patch.cantidad_minima_mayorista !== undefined
+          ? patch.cantidad_minima_mayorista
+          : undefined;
+      // Solo bloqueamos si en el body se setean explícitamente como null/0.
+      if ((efPrecio !== undefined && (efPrecio == null || efPrecio <= 0)) ||
+          (efMin !== undefined && (efMin == null || efMin < 1))) {
+        return NextResponse.json(
+          errorResponse(
+            "Para mostrar el precio mayorista en la web cargá un precio > 0 y una cantidad mínima >= 1."
+          ),
+          { status: 400 }
+        );
+      }
     }
 
     // Catálogo enriquecido (Fase 1 catálogo)

@@ -43,6 +43,9 @@ const PUBLIC_DETAIL_SELECT =
   "volumen_ml," +
   "genero," +
   "orden_web," +
+  "precio_mayorista," +
+  "cantidad_minima_mayorista," +
+  "visible_mayorista_web," +
   "familia:familias_olfativas(nombre,descripcion)," +
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)," +
@@ -98,6 +101,9 @@ type ProductoDetalleRaw = {
   volumen_ml: number | null;
   genero: string | null;
   orden_web: number | null;
+  precio_mayorista: number | null;
+  cantidad_minima_mayorista: number | null;
+  visible_mayorista_web: boolean | null;
   familia: FamiliaRef;
   categoria: CategoriaRef;
   marca_ref: MarcaRef;
@@ -231,6 +237,18 @@ function toDetalle(r: ProductoDetalleRaw) {
           alt_text: x.alt_text,
         }));
     })(),
+    // Mayorista informativo (Fase Mayorista). Mismo shape que el listado.
+    mayorista:
+      r.visible_mayorista_web === true &&
+      typeof r.precio_mayorista === "number" &&
+      r.precio_mayorista > 0 &&
+      typeof r.cantidad_minima_mayorista === "number" &&
+      r.cantidad_minima_mayorista >= 1
+        ? {
+            precio: r.precio_mayorista,
+            cantidad_minima: r.cantidad_minima_mayorista,
+          }
+        : null,
     notas_top: pickNotas(r.notas, "top"),
     notas_heart: pickNotas(r.notas, "heart"),
     notas_base: pickNotas(r.notas, "base"),

@@ -47,6 +47,8 @@ type ApiListaProducto = {
   marca_nombre?: string | null;
   marca_slug?: string | null;
   orden_web: number | null;
+  /** Precio mayorista informativo (Fase Mayorista). Null si no debe mostrarse. */
+  mayorista?: { precio: number; cantidad_minima: number } | null;
 };
 
 export type ApiDetalleProducto = ApiListaProducto & {
@@ -130,6 +132,7 @@ export function apiToMockProduct(api: ApiListaProducto): Product {
     notes: fromMock?.notes ?? { top: [], heart: [], base: [] },
     concentration: api.concentracion ?? fromMock?.concentration ?? "",
     size: buildSize(api.volumen_ml) || fromMock?.size || "",
+    mayorista: api.mayorista ?? null,
   };
 }
 

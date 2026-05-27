@@ -26,7 +26,7 @@ const RETURNING_COLS =
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
-  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web," +
+  "slug_web,visible_web,destacado_web,descripcion_corta,descripcion_web,marca,marca_id,precio_web,precio_mayorista,cantidad_minima_mayorista,visible_mayorista_web," +
   "precio_oferta,oferta_hasta,nuevo_hasta,concentracion,volumen_ml,genero," +
   "proximamente,orden_web,familia_olfativa_id";
 
@@ -109,6 +109,9 @@ export async function insertProductoPostgrest(
     marca: d.marca ?? null,
     marca_id: d.marca_id ?? null,
     precio_web: d.precio_web ?? null,
+    precio_mayorista: d.precio_mayorista ?? null,
+    cantidad_minima_mayorista: d.cantidad_minima_mayorista ?? null,
+    visible_mayorista_web: d.visible_mayorista_web === true,
     precio_oferta: d.precio_oferta ?? null,
     oferta_hasta: d.oferta_hasta ?? null,
     nuevo_hasta: d.nuevo_hasta ?? null,
@@ -149,6 +152,7 @@ export async function updateProductoPostgrest(
     "categoria_principal_id", "ubicacion_principal_id", "proveedor_principal_id",
     "slug_web", "visible_web", "destacado_web", "descripcion_corta", "descripcion_web",
     "marca", "marca_id", "precio_web",
+    "precio_mayorista", "cantidad_minima_mayorista", "visible_mayorista_web",
     "precio_oferta", "oferta_hasta", "nuevo_hasta", "concentracion", "volumen_ml",
     "genero", "proximamente", "orden_web", "familia_olfativa_id",
   ];

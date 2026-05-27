@@ -12,6 +12,7 @@ import { useCart } from "./CartContext";
 import { ProductCard } from "./ProductCard";
 import { SectionTitle } from "./SectionTitle";
 import { UsdEquivalent } from "./UsdEquivalent";
+import { MayoristaLine } from "./MayoristaLine";
 
 const statusMap = {
   available: { label: "Disponible", cls: "text-gold border-gold/40" },
@@ -194,6 +195,11 @@ export function ProductDetailClient({
                 <span className="font-display text-3xl text-primary">{formatPrice(product.price)}</span>
               </div>
               <UsdEquivalent priceGs={product.price} className="mt-2 text-sm" />
+              {product.mayorista && (
+                <div className="mt-3 inline-flex items-center gap-2 border border-gold/40 bg-gold/5 px-4 py-2 text-foreground/85">
+                  <MayoristaLine mayorista={product.mayorista} className="text-sm not-italic font-sans tracking-normal text-foreground/85" />
+                </div>
+              )}
 
               <div className="h-px bg-border my-8" />
 

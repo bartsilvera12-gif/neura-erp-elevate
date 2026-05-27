@@ -200,6 +200,13 @@ export default function EditarProductoPage() {
         descripcion_web: p.descripcion_web ?? "",
         marca_id: p.marca_id ?? "",
         marca: p.marca ?? "",
+        precio_mayorista:
+          p.precio_mayorista == null ? "" : String(p.precio_mayorista),
+        cantidad_minima_mayorista:
+          p.cantidad_minima_mayorista == null
+            ? ""
+            : String(p.cantidad_minima_mayorista),
+        visible_mayorista_web: p.visible_mayorista_web === true,
         precio_web: p.precio_web == null ? "" : String(p.precio_web),
         precio_oferta: p.precio_oferta == null ? "" : String(p.precio_oferta),
         oferta_hasta: fmtDt(p.oferta_hasta),
@@ -327,6 +334,9 @@ export default function EditarProductoPage() {
         destacado_web: cw.destacado_web,
         marca: cw.marca,
         marca_id: cw.marca_id,
+        precio_mayorista: cw.precio_mayorista,
+        cantidad_minima_mayorista: cw.cantidad_minima_mayorista,
+        visible_mayorista_web: cw.visible_mayorista_web,
         descripcion_corta: cw.descripcion_corta,
         descripcion_web: cw.descripcion_web,
         precio_web: cw.precio_web,

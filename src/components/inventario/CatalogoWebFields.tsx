@@ -26,6 +26,10 @@ export type CatalogoWebState = {
   marca_id: string;
   /** Texto libre legacy — sigue persistiendo para compatibilidad. */
   marca: string;
+  /** Precio mayorista informativo (Fase Mayorista). Strings para form. */
+  precio_mayorista: string;
+  cantidad_minima_mayorista: string;
+  visible_mayorista_web: boolean;
   /** Legacy. NO editable desde UI. La web usa precio_venta. */
   precio_web: string;
   precio_oferta: string;
@@ -50,6 +54,9 @@ export const emptyCatalogoWeb: CatalogoWebState = {
   descripcion_web: "",
   marca_id: "",
   marca: "",
+  precio_mayorista: "",
+  cantidad_minima_mayorista: "",
+  visible_mayorista_web: false,
   precio_web: "",
   precio_oferta: "",
   oferta_hasta: "",
@@ -260,6 +267,60 @@ export function CatalogoWebFields({ value, onChange, nombre, precioVenta, marcas
         </div>
       </div>
 
+      {/* Precio mayorista informativo (Fase Mayorista) */}
+      <div className="border border-amber-200 rounded-lg bg-amber-50/40 p-4 mb-4">
+        <header className="mb-3">
+          <h3 className="text-sm font-semibold text-amber-900">Precio mayorista</h3>
+          <p className="text-xs text-amber-800/80">
+            Mostrá una referencia mayorista en la web pública. <strong>No aplica
+            descuentos automáticos</strong> en el carrito ni en el checkout.
+          </p>
+        </header>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Precio mayorista (Gs.)</label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={value.precio_mayorista}
+              onChange={(e) => set("precio_mayorista", e.target.value)}
+              placeholder="Vacío = sin precio mayorista"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Cantidad mínima</label>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={value.cantidad_minima_mayorista}
+              onChange={(e) => set("cantidad_minima_mayorista", e.target.value)}
+              placeholder="Ej. 6"
+              className={inputClass}
+            />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={value.visible_mayorista_web}
+                onChange={(e) => set("visible_mayorista_web", e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>Mostrar en la web</span>
+            </label>
+          </div>
+        </div>
+        {value.visible_mayorista_web &&
+          (!value.precio_mayorista.trim() || !value.cantidad_minima_mayorista.trim()) && (
+            <p className="mt-2 text-xs text-red-700">
+              Para mostrar en la web cargá precio y cantidad mínima.
+            </p>
+          )}
+      </div>
+
       {/* Nuevo + atributos */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
         <div>
@@ -420,6 +481,12 @@ export function catalogoWebToPayload(s: CatalogoWebState) {
     descripcion_web: s.descripcion_web.trim() || null,
     marca: s.marca.trim() || null,
     marca_id: s.marca_id || null,
+    precio_mayorista: num(s.precio_mayorista),
+    cantidad_minima_mayorista: (() => {
+      const v = num(s.cantidad_minima_mayorista);
+      return v == null ? null : Math.max(1, Math.floor(v));
+    })(),
+    visible_mayorista_web: !!s.visible_mayorista_web,
     /** Elevate no usa precio_web — la web toma precio_venta directo. */
     precio_web: null,
     precio_oferta: num(s.precio_oferta),

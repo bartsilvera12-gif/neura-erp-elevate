@@ -55,6 +55,9 @@ const PUBLIC_SELECT =
   "volumen_ml," +
   "genero," +
   "orden_web," +
+  "precio_mayorista," +
+  "cantidad_minima_mayorista," +
+  "visible_mayorista_web," +
   "familia:familias_olfativas(nombre)," +
   "categoria:categoria_principal_id(nombre,slug_web,visible_web,activo)," +
   "marca_ref:marca_id(id,nombre,slug_web,visible_web,activo)";
@@ -94,6 +97,9 @@ type ProductoRaw = {
   volumen_ml: number | null;
   genero: string | null;
   orden_web: number | null;
+  precio_mayorista: number | null;
+  cantidad_minima_mayorista: number | null;
+  visible_mayorista_web: boolean | null;
   familia: FamiliaRef;
   categoria: CategoriaRef;
   marca_ref: MarcaRef;
@@ -125,6 +131,9 @@ export type ProductoPublico = {
   marca_nombre: string | null;
   marca_slug: string | null;
   orden_web: number | null;
+  /** Precio mayorista informativo (Fase Mayorista). Solo se exponen los 3
+   *  campos si visible_mayorista_web=true Y precio>0 Y cantidad>=1. */
+  mayorista: { precio: number; cantidad_minima: number } | null;
 };
 
 function isOfertaActiva(precio_oferta: number | null, oferta_hasta: string | null): boolean {
@@ -215,6 +224,18 @@ export function toPublico(r: ProductoRaw): ProductoPublico {
         ? r.marca_ref.slug_web ?? null
         : null,
     orden_web: r.orden_web,
+    // Mayorista: solo se expone si está visible y los valores son sanos.
+    mayorista:
+      r.visible_mayorista_web === true &&
+      typeof r.precio_mayorista === "number" &&
+      r.precio_mayorista > 0 &&
+      typeof r.cantidad_minima_mayorista === "number" &&
+      r.cantidad_minima_mayorista >= 1
+        ? {
+            precio: r.precio_mayorista,
+            cantidad_minima: r.cantidad_minima_mayorista,
+          }
+        : null,
   };
 }
 

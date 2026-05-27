@@ -40,6 +40,9 @@ interface ProductoRow {
   marca?: string | null;
   marca_id?: string | null;
   precio_web?: number | null;
+  precio_mayorista?: number | null;
+  cantidad_minima_mayorista?: number | null;
+  visible_mayorista_web?: boolean | null;
   /* Catálogo enriquecido (Fase 1 catálogo) — el endpoint singular los devuelve
    * desde el fix 519d10f; faltaba que el mapper los pasara al form. */
   precio_oferta?: number | null;
@@ -105,6 +108,10 @@ function rowToProducto(row: ProductoRow): Producto {
     marca: row.marca ?? null,
     marca_id: row.marca_id ?? null,
     precio_web: row.precio_web == null ? null : Number(row.precio_web),
+    precio_mayorista: row.precio_mayorista == null ? null : Number(row.precio_mayorista),
+    cantidad_minima_mayorista:
+      row.cantidad_minima_mayorista == null ? null : Number(row.cantidad_minima_mayorista),
+    visible_mayorista_web: row.visible_mayorista_web === true,
     // Fix: estos campos venían del backend pero el mapper los descartaba,
     // dejando el form de edición vacío aunque la DB y el endpoint los traían.
     precio_oferta: row.precio_oferta == null ? null : Number(row.precio_oferta),
@@ -239,6 +246,9 @@ export async function saveProducto(
     marca: datos.marca ?? null,
     marca_id: datos.marca_id ?? null,
     precio_web: datos.precio_web ?? null,
+    precio_mayorista: datos.precio_mayorista ?? null,
+    cantidad_minima_mayorista: datos.cantidad_minima_mayorista ?? null,
+    visible_mayorista_web: datos.visible_mayorista_web === true,
     precio_oferta: datos.precio_oferta ?? null,
     oferta_hasta: datos.oferta_hasta ?? null,
     nuevo_hasta: datos.nuevo_hasta ?? null,
@@ -306,6 +316,11 @@ export async function updateProducto(
   if (datos.marca !== undefined) body.marca = datos.marca ?? null;
   if (datos.marca_id !== undefined) body.marca_id = datos.marca_id ?? null;
   if (datos.precio_web !== undefined) body.precio_web = datos.precio_web ?? null;
+  if (datos.precio_mayorista !== undefined) body.precio_mayorista = datos.precio_mayorista ?? null;
+  if (datos.cantidad_minima_mayorista !== undefined)
+    body.cantidad_minima_mayorista = datos.cantidad_minima_mayorista ?? null;
+  if (datos.visible_mayorista_web !== undefined)
+    body.visible_mayorista_web = datos.visible_mayorista_web === true;
   // Catálogo enriquecido
   if (datos.precio_oferta !== undefined) body.precio_oferta = datos.precio_oferta ?? null;
   if (datos.oferta_hasta !== undefined) body.oferta_hasta = datos.oferta_hasta ?? null;
