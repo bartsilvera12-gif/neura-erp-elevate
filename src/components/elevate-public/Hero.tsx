@@ -26,9 +26,6 @@ export function Hero() {
 
       <div className="relative container mx-auto px-6 lg:px-10 py-32 lg:py-40">
         <div className="max-w-2xl animate-fade-up">
-          <span className="inline-block text-gold-light text-xs tracking-[0.4em] uppercase mb-6">
-            Maison de Parfum · Edición 2026
-          </span>
           <h1 className="font-display text-5xl md:text-7xl lg:text-8xl text-cream leading-[0.95] text-balance">
             Elevate
           </h1>

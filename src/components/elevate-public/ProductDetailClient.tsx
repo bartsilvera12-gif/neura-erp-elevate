@@ -284,11 +284,6 @@ export function ProductDetailClient({
                       );
                     })}
                   </div>
-                  {presentacionElegida && (
-                    <p className="mt-2 text-xs text-muted-foreground italic font-editorial">
-                      SKU presentación: <span className="font-mono not-italic">{presentacionElegida.sku ?? "—"}</span>
-                    </p>
-                  )}
                 </div>
               )}
 
