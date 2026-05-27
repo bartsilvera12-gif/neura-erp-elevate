@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X, ShoppingBag } from "lucide-react";
 import { Logo } from "./Logo";
 import { useCart } from "./CartContext";
+import { SearchBox } from "./SearchBox";
 
 const NAV = [
   { label: "Inicio", href: "/" },
@@ -51,25 +52,38 @@ export function Header() {
         <Logo />
 
         <nav className="hidden lg:flex items-center gap-8" aria-label="Principal">
-          {NAV.map((n) => {
+          {NAV.map((n, i) => {
             const active = isActive(n.href);
             return (
-              <Link
-                key={n.href}
-                href={n.href}
-                className={`text-sm tracking-wide transition-smooth relative after:content-[''] after:absolute after:bottom-[-6px] after:left-0 after:h-px after:bg-gold after:transition-all ${
-                  active
-                    ? "text-primary after:w-full"
-                    : "text-foreground/80 hover:text-primary after:w-0 hover:after:w-full"
-                }`}
-              >
-                {n.label}
-              </Link>
+              <span key={n.href} className="flex items-center gap-8">
+                <Link
+                  href={n.href}
+                  className={`text-sm tracking-wide transition-smooth relative after:content-[''] after:absolute after:bottom-[-6px] after:left-0 after:h-px after:bg-gold after:transition-all ${
+                    active
+                      ? "text-primary after:w-full"
+                      : "text-foreground/80 hover:text-primary after:w-0 hover:after:w-full"
+                  }`}
+                >
+                  {n.label}
+                </Link>
+                {/* Lupa inmediatamente después del primer link ("Inicio"),
+                    integrada visualmente con los items del navbar. */}
+                {i === 0 && <SearchBox />}
+              </span>
             );
           })}
         </nav>
 
         <div className="flex items-center gap-3">
+          {/* En mobile el nav está colapsado en el menú hamburguesa, por eso
+              acá renderizamos una sola instancia de la lupa visible solo en
+              mobile. En desktop la lupa vive dentro del <nav> al lado de
+              "Inicio" (arriba). No hay duplicación visual: el switch es por
+              viewport. */}
+          <div className="lg:hidden">
+            <SearchBox />
+          </div>
+
           <Link
             href="/catalogo"
             className="hidden lg:inline-flex items-center px-6 py-3 bg-primary text-primary-foreground text-xs tracking-[0.25em] uppercase hover:bg-primary-glow transition-elegant shadow-soft border border-gold/30"

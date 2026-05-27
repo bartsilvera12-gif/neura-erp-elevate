@@ -80,6 +80,11 @@ export function ProductCard({ product }: { product: Product }) {
         <Link href={`/producto/${product.slug}`} className="hover:text-primary transition-elegant">
           <h3 className="font-display text-xl text-foreground leading-tight">{product.name}</h3>
         </Link>
+        {/* Disclaimer discreto: la imagen mostrada puede no coincidir
+            exactamente con el envase final del producto entregado. */}
+        <div className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground/70">
+          Imagen referencial
+        </div>
         <div className="text-sm text-muted-foreground italic font-editorial">{product.type}</div>
 
         <div className="mt-3 flex items-baseline gap-3">

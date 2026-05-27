@@ -302,6 +302,10 @@ export async function GET(request: NextRequest) {
     // Filtros de catálogo Fase Marcas. Se aceptan slug (preferido) o id.
     const marcaSlug = url.searchParams.get("marca")?.trim().toLowerCase() || null;
     const categoriaSlug = url.searchParams.get("categoria")?.trim().toLowerCase() || null;
+    // Búsqueda libre (Fase Buscador): match en nombre, marca text y slug.
+    // Limitado a 60 chars para no abusar de PostgREST. Escape de comodines.
+    const qRaw = url.searchParams.get("q")?.trim() || "";
+    const q = qRaw.slice(0, 60).replace(/[%_,]/g, "");
 
     // Para filtrar productos por slug de marca/categoría usamos `!inner` en el
     // embed correspondiente: convierte el LEFT JOIN en INNER JOIN y permite
@@ -331,6 +335,12 @@ export async function GET(request: NextRequest) {
     if (promosOnly) qs.set("precio_oferta", "not.is.null");
     if (marcaSlug) qs.append("marca_ref.slug_web", `eq.${marcaSlug}`);
     if (categoriaSlug) qs.append("categoria.slug_web", `eq.${categoriaSlug}`);
+    // Búsqueda libre: PostgREST `or=` con ilike sobre nombre, marca text y
+    // slug_web. La marca text (legacy) refleja el nombre de la marca formal
+    // tras la sincronización del ERP, así que cubre Armani/VERSACE/etc.
+    if (q) {
+      qs.append("or", `(nombre.ilike.*${q}*,marca.ilike.*${q}*,slug_web.ilike.*${q}*)`);
+    }
 
     const result = await postgrestGet<ProductoRaw>("productos", qs.toString());
     if (!result.ok) {
