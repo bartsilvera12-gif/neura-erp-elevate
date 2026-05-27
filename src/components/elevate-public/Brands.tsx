@@ -1,38 +1,72 @@
 import Link from "next/link";
-import { brands } from "@/lib/elevate-public/products-mock";
 import { SectionTitle } from "./SectionTitle";
+import type { MarcaWeb } from "@/lib/elevate-public/catalog-fetch";
 
-export function Brands() {
+/**
+ * Grilla de marcas reales (Fase Marcas). Las filas vienen desde la DB vía
+ * `/api/public/elevate/marcas`. Cada card linkea al catálogo filtrado por
+ * `?marca=<slug>` para que el cliente vea solo productos de esa marca.
+ *
+ * Si hay `logo_url`, se muestra; si no, se usa la letra inicial en gris
+ * tipográfico como antes (consistente con el diseño premium previo).
+ *
+ * Reemplaza el listado hardcodeado anterior (que era de categorías, no de
+ * marcas).
+ */
+export function Brands({ marcas }: { marcas: MarcaWeb[] }) {
   return (
     <section id="marcas" className="py-24 lg:py-32 bg-background">
       <div className="container mx-auto px-6 lg:px-10">
         <SectionTitle
           eyebrow="Marcas"
-          title="Maisons que elegimos"
-          subtitle="Una curaduría global: del nicho confidencial al árabe ceremonial."
+          title="Marcas que ofrecemos"
+          subtitle="Casas perfumistas seleccionadas. Tocá una marca para ver sus fragancias."
         />
-        <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {brands.map((b) => (
-            <Link
-              key={b.name}
-              href="/catalogo"
-              className="group relative overflow-hidden border border-border/60 hover:border-gold transition-elegant aspect-[3/4] flex flex-col justify-end p-8 bg-cream/40 hover:shadow-elegant"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-gold/10 group-hover:from-primary/15 transition-elegant" />
-              <div className="absolute top-6 right-6 text-[10px] tracking-[0.3em] uppercase text-gold">
-                {b.category}
-              </div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-display text-5xl text-primary/10 group-hover:text-primary/20 transition-elegant">
-                {b.name.charAt(0)}
-              </div>
-              <div className="relative">
-                <h3 className="font-display text-2xl text-primary">{b.name}</h3>
-                <div className="gold-divider w-12 my-3" />
-                <p className="text-sm text-muted-foreground font-editorial italic">{b.description}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {marcas.length === 0 ? (
+          <p className="mt-12 text-center text-sm text-muted-foreground italic font-editorial">
+            Próximamente vamos a sumar más marcas a nuestra curaduría.
+          </p>
+        ) : (
+          <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {marcas.map((m) => {
+              const href = m.slug ? `/catalogo?marca=${encodeURIComponent(m.slug)}` : "/catalogo";
+              return (
+                <Link
+                  key={m.id}
+                  href={href}
+                  className="group relative overflow-hidden border border-border/60 hover:border-gold transition-elegant aspect-[3/4] flex flex-col justify-end p-8 bg-cream/40 hover:shadow-elegant"
+                  aria-label={`Ver productos de ${m.nombre}`}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-gold/10 group-hover:from-primary/15 transition-elegant" />
+                  {m.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={m.logo_url}
+                      alt={`Logo ${m.nombre}`}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-h-24 max-w-[60%] object-contain opacity-80 group-hover:opacity-100 transition-elegant"
+                    />
+                  ) : (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-display text-5xl text-primary/10 group-hover:text-primary/20 transition-elegant">
+                      {m.nombre.charAt(0)}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <h3 className="font-display text-2xl text-primary">{m.nombre}</h3>
+                    <div className="gold-divider w-12 my-3" />
+                    {m.descripcion && (
+                      <p className="text-sm text-muted-foreground font-editorial italic">
+                        {m.descripcion}
+                      </p>
+                    )}
+                    <span className="mt-3 inline-block text-[10px] tracking-[0.3em] uppercase text-gold opacity-0 group-hover:opacity-100 transition-elegant">
+                      Ver productos →
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
