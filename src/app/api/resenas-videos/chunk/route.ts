@@ -31,8 +31,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import * as tus from "tus-js-client";
-import { Readable } from "node:stream";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
@@ -44,6 +42,12 @@ import {
   buildResenaVideoPath,
 } from "@/lib/resenas/storage";
 import { getAccessTokenForRequest, postgrestGet } from "@/lib/supabase/postgrest-runtime";
+import { getSupabaseServerUrl } from "@/lib/supabase/server-url";
+
+// Runtime y duración: este endpoint maneja uploads que pueden tardar.
+export const runtime = "nodejs";
+export const maxDuration = 300; // segundos
+export const dynamic = "force-dynamic";
 
 const TMP_BASE = path.join(os.tmpdir(), "resenas-uploads");
 const MAX_CHUNK_BYTES = 8 * 1024 * 1024; // 8 MB tope defensivo por chunk
@@ -59,43 +63,68 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
-async function uploadToStorageViaTus(opts: {
+/**
+ * Server-side POST directo a Supabase Storage usando service_role.
+ *
+ * Server-to-server: no hay preflight CORS, no hay browser body limit.
+ * Usa la URL interna si está configurada (`SUPABASE_INTERNAL_URL`,
+ * típicamente loopback al Kong del mismo VPS — sin Cloudflare en el path).
+ * Si no, cae a la URL pública (la que sí pasa por Cloudflare).
+ *
+ * Para archivos < 100 MB esto siempre funciona porque está debajo del
+ * único corte que tenemos (Cloudflare free). Para archivos más grandes,
+ * y si SUPABASE_INTERNAL_URL no está seteada, conviene activar el flag
+ * en Cloudflare DNS (gris en lugar de naranja) para api.neura.com.py.
+ */
+async function uploadToStorageDirect(opts: {
   fullPath: string;
   filePath: string;
   contentType: string;
   size: number;
-}): Promise<void> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const sr = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!supabaseUrl || !sr) throw new Error("Falta config Supabase para upload");
-  const endpoint = `${supabaseUrl.replace(/\/$/, "")}/storage/v1/upload/resumable`;
-  // tus-js-client en Node acepta un fs.ReadStream. Le pasamos chunkSize=6MB.
-  const fileStream = (await import("node:fs")).createReadStream(opts.filePath);
-  return new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(fileStream as unknown as Readable, {
-      endpoint,
-      uploadLengthDeferred: false,
-      uploadSize: opts.size,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
+  const baseUrl = getSupabaseServerUrl().replace(/\/$/, "");
+  if (!sr) return { ok: false, error: "Falta SUPABASE_SERVICE_ROLE_KEY" };
+
+  const endpoint = `${baseUrl}/storage/v1/object/${encodeURIComponent(
+    RESENAS_VIDEOS_BUCKET
+  )}/${opts.fullPath.split("/").map(encodeURIComponent).join("/")}`;
+
+  // Para archivos < 200 MB conviene cargar a Buffer y postear. La container
+  // tiene RAM suficiente y evita complicaciones de streaming en node-fetch.
+  const buf = await fs.readFile(opts.filePath);
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 270_000); // 4.5 min hard cap
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      body: buf,
       headers: {
-        authorization: `Bearer ${sr}`,
+        Authorization: `Bearer ${sr}`,
         apikey: sr,
+        "Content-Type": opts.contentType,
+        "Content-Length": String(opts.size),
         "x-upsert": "false",
+        "Cache-Control": "3600",
       },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: RESENAS_VIDEOS_BUCKET,
-        objectName: opts.fullPath,
-        contentType: opts.contentType,
-        cacheControl: "3600",
-      },
-      chunkSize: 6 * 1024 * 1024,
-      onError: (e) => reject(e instanceof Error ? e : new Error(String(e))),
-      onSuccess: () => resolve(),
+      signal: ac.signal,
     });
-    upload.start();
-  });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      return {
+        ok: false,
+        error: `HTTP ${r.status} ${txt.slice(0, 200)}`,
+      };
+    }
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  } finally {
+    clearTimeout(t);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -221,17 +250,16 @@ export async function POST(request: NextRequest) {
       `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const bucketPath = buildResenaVideoPath(empresaId, videoId, mime);
 
-    try {
-      await uploadToStorageViaTus({
-        fullPath: bucketPath,
-        filePath: finalPath,
-        contentType: mime,
-        size: totalSize,
-      });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+    const res = await uploadToStorageDirect({
+      fullPath: bucketPath,
+      filePath: finalPath,
+      contentType: mime,
+      size: totalSize,
+    });
+    if (!res.ok) {
+      console.error("[/api/resenas-videos/chunk] storage upload", res.error);
       return NextResponse.json(
-        errorResponse(`No se pudo subir el video al storage. (${msg.slice(0, 200)})`),
+        errorResponse(`No se pudo subir el video al storage. (${res.error.slice(0, 200)})`),
         { status: 502 }
       );
     }
