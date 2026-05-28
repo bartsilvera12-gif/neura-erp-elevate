@@ -91,9 +91,11 @@ type ResenaVideo = {
 };
 
 const MAX_VIDEOS = 4;
-const MAX_BYTES = 200 * 1024 * 1024;
+const MAX_BYTES = 95 * 1024 * 1024;
 const ACCEPT_ATTR = "video/mp4,video/webm,video/quicktime,.mov";
 const MIME_RE = /^video\/(mp4|webm|quicktime)$/i;
+const OVERSIZE_MSG =
+  "El video supera el tamaño permitido. Subí un MP4 optimizado para web de hasta 95 MB.";
 
 export default function ResenasClient() {
   const [videos, setVideos] = useState<ResenaVideo[]>([]);
@@ -152,7 +154,7 @@ export default function ResenasClient() {
       return;
     }
     if (f.size > MAX_BYTES) {
-      setError(`El video supera el máximo de ${(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.`);
+      setError(OVERSIZE_MSG);
       return;
     }
     // Algunos browsers no setean file.type para .mov; aceptar por extensión.
@@ -184,9 +186,18 @@ export default function ResenasClient() {
         });
         video_path = r.video_path;
       } catch (e) {
-        setError(
-          `No se pudo subir el video. (${e instanceof Error ? e.message : String(e)})`
-        );
+        const raw = e instanceof Error ? e.message : String(e);
+        // Si el server devolvió 413 (oversize del nginx/storage-api o
+        // Cloudflare upstream), mostrar copy humano fijo.
+        if (
+          /413|tama[nñ]o permitido|Request Entity Too Large|Maximum size|Payload Too Large/i.test(
+            raw
+          )
+        ) {
+          setError(OVERSIZE_MSG);
+        } else {
+          setError(`No se pudo subir el video. (${raw})`);
+        }
         return;
       }
       setUploadPct(100);
@@ -290,13 +301,13 @@ export default function ResenasClient() {
                 className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-amber-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-amber-600 dark:text-slate-300"
               />
               <p className="text-xs text-slate-500">
-                MP4 (recomendado), WebM o MOV — máximo{" "}
-                {(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.
+                Máximo 95 MB por video. Recomendamos MP4 optimizado para web.
               </p>
               <p className="text-xs text-slate-400">
-                Tip: los MOV se ven bien en Safari/iPhone, pero algunos
-                navegadores (Firefox y ciertos Chrome) pueden no reproducirlos.
-                Si querés máxima compatibilidad en la web pública, usá MP4.
+                Aceptamos MP4 (recomendado), WebM o MOV. Los MOV reproducen
+                bien en Safari/iPhone, pero algunos navegadores (Firefox y
+                ciertos Chrome) pueden no reproducirlos: para máxima
+                compatibilidad usá MP4.
               </p>
             </div>
             <button

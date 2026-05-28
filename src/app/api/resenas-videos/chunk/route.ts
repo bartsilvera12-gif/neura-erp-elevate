@@ -51,7 +51,7 @@ export const dynamic = "force-dynamic";
 
 const TMP_BASE = path.join(os.tmpdir(), "resenas-uploads");
 const MAX_CHUNK_BYTES = 8 * 1024 * 1024; // 8 MB tope defensivo por chunk
-const MAX_CHUNKS = 200; // 200 chunks * 6 MB = 1.2 GB, ya tenemos cap de 200 MB en MAX_VIDEO_BYTES
+const MAX_CHUNKS = 200; // tope teórico de chunks; el cap real lo impone MAX_VIDEO_BYTES (95 MB)
 const SAFE_UPLOAD_ID = /^[0-9a-zA-Z_-]{8,128}$/;
 
 async function pathExists(p: string): Promise<boolean> {
@@ -90,7 +90,7 @@ async function uploadToStorageDirect(opts: {
     RESENAS_VIDEOS_BUCKET
   )}/${opts.fullPath.split("/").map(encodeURIComponent).join("/")}`;
 
-  // Para archivos < 200 MB conviene cargar a Buffer y postear. La container
+  // El cap operativo es 95 MB; cargar a Buffer y postear es simple y la
   // tiene RAM suficiente y evita complicaciones de streaming en node-fetch.
   const buf = await fs.readFile(opts.filePath);
   const ac = new AbortController();
@@ -233,7 +233,7 @@ export async function POST(request: NextRequest) {
         if (totalSize > MAX_VIDEO_BYTES) {
           return NextResponse.json(
             errorResponse(
-              `Video demasiado grande (máx. ${(MAX_VIDEO_BYTES / 1024 / 1024).toFixed(0)} MB).`
+              "El video supera el tamaño permitido. Subí un MP4 optimizado para web de hasta 95 MB."
             ),
             { status: 413 }
           );
@@ -258,6 +258,21 @@ export async function POST(request: NextRequest) {
     });
     if (!res.ok) {
       console.error("[/api/resenas-videos/chunk] storage upload", res.error);
+      // Si el upload cayó por límite de tamaño en upstream (nginx, storage-api
+      // o Cloudflare), devolver 413 con copy humano fijo para que la UI lo
+      // muestre tal cual.
+      const isSizeLimit =
+        /413|Request Entity Too Large|Maximum size exceeded|Payload Too Large|nginx|cloudflare/i.test(
+          res.error
+        );
+      if (isSizeLimit) {
+        return NextResponse.json(
+          errorResponse(
+            "El video supera el tamaño permitido. Subí un MP4 optimizado para web de hasta 95 MB."
+          ),
+          { status: 413 }
+        );
+      }
       return NextResponse.json(
         errorResponse(`No se pudo subir el video al storage. (${res.error.slice(0, 200)})`),
         { status: 502 }

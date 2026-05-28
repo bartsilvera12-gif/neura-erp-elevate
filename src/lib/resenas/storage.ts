@@ -20,7 +20,17 @@ export const ALLOWED_VIDEO_EXT: Record<string, string> = {
   "video/webm": "webm",
   "video/quicktime": "mov",
 };
-export const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
+/**
+ * Tope operativo seguro: 95 MB.
+ *
+ * El stack de Elevate hoy permite hasta ~100 MB por upload (nginx host
+ * `client_max_body_size 120M`, storage-api `FILE_SIZE_LIMIT=104857600`,
+ * bucket `resenas-videos.file_size_limit=104857600`). El techo práctico
+ * desde el browser, sin embargo, lo pone Cloudflare free-tier que corta
+ * cerca de 100 MB. Dejamos 95 MB de margen para que cualquier video que
+ * la UI acepte llegue al storage sin pegar contra Cloudflare.
+ */
+export const MAX_VIDEO_BYTES = 95 * 1024 * 1024; // 95 MB
 
 export const MAX_VIDEOS_VISIBLES = 4;
 
