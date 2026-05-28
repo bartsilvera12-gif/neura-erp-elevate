@@ -16,7 +16,7 @@ interface Form {
   city: string;
   zip: string;
   notes: string;
-  payment: "transferencia" | "tarjeta" | "whatsapp";
+  payment: "transferencia" | "tarjeta";
 }
 
 export default function CheckoutPage() {
@@ -25,6 +25,11 @@ export default function CheckoutPage() {
   const [form, setForm] = useState<Form>({
     name: "", email: "", phone: "", address: "", city: "", zip: "", notes: "", payment: "transferencia",
   });
+  // Número de WhatsApp para el botón "Consultar por WhatsApp". Se prioriza
+  // el env var; fallback al número oficial del cliente para que el CTA
+  // funcione aun sin configuración.
+  const waNumber = WHATSAPP_NUMBER || "595994570003";
+  const waConsultaUrl = `https://wa.me/${waNumber}`;
 
   const update = (k: keyof Form, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -201,12 +206,11 @@ export default function CheckoutPage() {
             <fieldset>
               <legend className="font-display text-2xl text-primary mb-1">Método de pago</legend>
               <div className="gold-divider w-12 mb-6" />
-              <div className="grid sm:grid-cols-3 gap-3">
+              <div className="grid sm:grid-cols-2 gap-3">
                 {(
                   [
-                    { v: "transferencia", l: "Transferencia", d: "10% off" },
-                    { v: "tarjeta", l: "Tarjeta", d: "Hasta 6 cuotas" },
-                    { v: "whatsapp", l: "Coordinar", d: "Por WhatsApp" },
+                    { v: "transferencia", l: "Transferencia bancaria" },
+                    { v: "tarjeta", l: "Tarjeta de crédito/débito" },
                   ] as const
                 ).map((p) => (
                   <label
@@ -224,10 +228,17 @@ export default function CheckoutPage() {
                       className="sr-only"
                     />
                     <div className="font-display text-base text-primary">{p.l}</div>
-                    <div className="text-[10px] tracking-[0.25em] uppercase text-gold mt-1">{p.d}</div>
                   </label>
                 ))}
               </div>
+              <a
+                href={waConsultaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-gold hover:text-primary transition-smooth"
+              >
+                ¿Dudas? Consultar por WhatsApp →
+              </a>
             </fieldset>
 
             {submitError && (

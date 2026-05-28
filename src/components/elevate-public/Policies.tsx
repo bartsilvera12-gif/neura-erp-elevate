@@ -5,12 +5,12 @@ const policies = [
   {
     title: "Política de Devolución",
     items: [
-      "Devoluciones aceptadas dentro de los 7 días posteriores a la recepción.",
-      "El producto debe estar sin uso, con su empaque original y precintos intactos.",
-      "El reintegro se realiza por el mismo medio de pago original.",
-      "El costo de envío de devolución corre por cuenta del cliente, salvo defecto comprobado.",
+      "Los perfumes son originales: duración, empaque y aroma son responsabilidad del productor.",
+      "Garantía solo si el frasco llega con pérdidas o roto.",
+      "No se reembolsa ni se revierten pagos una vez abierto el producto.",
+      "Si pagaste y el producto está agotado, devolvemos el dinero por transferencia en máximo 24 hs.",
     ],
-    link: null as { href: string; label: string } | null,
+    link: { href: "/politica-devoluciones", label: "Ver política de devoluciones completa" } as { href: string; label: string } | null,
   },
   {
     title: "Política de Envío",

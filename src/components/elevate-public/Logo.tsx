@@ -5,27 +5,44 @@ import Link from "next/link";
  * Logo Elevate. Variante `dark` para fondo claro (default), `light` para
  * fondo bordeaux. Asset en `public/brand/elevate/elevate-logo-gold.png`.
  */
-export function Logo({ variant = "dark" }: { variant?: "dark" | "light" }) {
+export function Logo({
+  variant = "dark",
+  size = "md",
+}: {
+  variant?: "dark" | "light";
+  /** "md" para header (default); "lg" para footer (más presencia visual). */
+  size?: "md" | "lg";
+}) {
+  const isLg = size === "lg";
+  const imgClass = isLg
+    ? "h-28 w-28 md:h-36 md:w-36 object-contain"
+    : "h-20 w-20 md:h-24 md:w-24 object-contain";
+  const titleClass = isLg
+    ? "font-display text-3xl md:text-4xl tracking-[0.18em]"
+    : "font-display text-2xl tracking-[0.18em]";
+  const tagClass = isLg
+    ? "text-xs md:text-sm tracking-[0.3em] mt-1"
+    : "text-[10px] tracking-[0.3em] mt-1";
   return (
     <Link href="/" className="flex items-center gap-3 group" aria-label="Elevate inicio">
       <Image
         src="/brand/elevate/elevate-logo-gold.png"
         alt="Elevate logo"
-        width={96}
-        height={96}
-        className="h-20 w-20 md:h-24 md:w-24 object-contain"
+        width={isLg ? 144 : 96}
+        height={isLg ? 144 : 96}
+        className={imgClass}
         priority
       />
       <div className="leading-none">
         <div
-          className={`font-display text-2xl tracking-[0.18em] ${
+          className={`${titleClass} ${
             variant === "light" ? "text-cream" : "text-primary"
           }`}
         >
           ELEVATE
         </div>
         <div
-          className={`text-[10px] tracking-[0.3em] mt-1 ${
+          className={`${tagClass} ${
             variant === "light" ? "text-gold-light" : "text-gold"
           }`}
         >

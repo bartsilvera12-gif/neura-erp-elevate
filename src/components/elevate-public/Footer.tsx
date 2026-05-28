@@ -31,7 +31,7 @@ export function Footer() {
       <div className="container mx-auto px-6 lg:px-10">
         <div className="grid md:grid-cols-4 gap-12 pb-12 border-b border-gold/20">
           <div className="md:col-span-2">
-            <Logo variant="light" />
+            <Logo variant="light" size="lg" />
             <p className="mt-6 text-cream/80 leading-relaxed max-w-md font-editorial italic text-xl">
               La esencia de tu próximo negocio. Fragancias seleccionadas para quienes buscan elegancia,
               presencia y exclusividad.
@@ -46,6 +46,7 @@ export function Footer() {
               <li><Link href="/nosotros" className="hover:text-gold-light transition-smooth">Quiénes somos</Link></li>
               <li><Link href="/faq" className="hover:text-gold-light transition-smooth">FAQ y Políticas</Link></li>
               <li><Link href="/politica-envios" className="hover:text-gold-light transition-smooth">Política de envíos</Link></li>
+              <li><Link href="/politica-devoluciones" className="hover:text-gold-light transition-smooth">Política de devoluciones</Link></li>
             </ul>
           </div>
 

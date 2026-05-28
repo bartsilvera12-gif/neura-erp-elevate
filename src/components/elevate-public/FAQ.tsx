@@ -9,8 +9,8 @@ const faqs = [
   { q: "¿Realizan envíos a todo el país?", a: "Sí, enviamos a todo el territorio nacional mediante operadores logísticos premium con seguimiento. CABA y GBA cuentan con envío express." },
   { q: "¿Puedo consultar disponibilidad antes de comprar?", a: "Por supuesto. Podés consultarnos por WhatsApp y te respondemos en el día con stock, presentaciones disponibles y asesoramiento personalizado." },
   { q: "¿Tienen perfumes nicho y ultranicho?", a: "Sí. Es nuestra especialidad. Contamos con casas niche reconocidas y ediciones ultranicho de tirada limitada." },
-  { q: "¿Qué métodos de pago aceptan?", a: "Aceptamos transferencia bancaria, tarjetas de crédito y débito, y financiación en cuotas con bancos seleccionados." },
-  { q: "¿Hacen devoluciones?", a: "Sí, dentro de los 7 días siguientes a la recepción siempre que el producto se encuentre sin uso y con su empaque original intacto." },
+  { q: "¿Qué métodos de pago aceptan?", a: "Aceptamos transferencia bancaria y tarjetas de crédito/débito." },
+  { q: "¿Hacen devoluciones?", a: "No realizamos devoluciones generales. Los perfumes son originales y su duración, empaque y aroma son responsabilidad del productor. Solo aplica garantía si el frasco llega con pérdidas o roto. No se reembolsa una vez abierto el producto. Si pagaste y el producto está agotado, devolvemos el dinero por transferencia en máximo 24 hs." },
 ];
 
 export function FAQ() {
