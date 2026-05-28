@@ -4,8 +4,53 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Clapperboard, Trash2, Upload, AlertCircle } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { supabase } from "@/lib/supabase";
+import * as tus from "tus-js-client";
 
 const BUCKET = "resenas-videos";
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+/**
+ * Upload por chunks (TUS resumable). 6 MB es el tamaño recomendado por
+ * Supabase Storage para el endpoint /storage/v1/upload/resumable. Cada chunk
+ * es una request independiente, así que cualquier proxy intermedio
+ * (Cloudflare, Traefik) no corta el upload de archivos grandes.
+ */
+const TUS_CHUNK_SIZE = 6 * 1024 * 1024;
+
+async function uploadViaTus(opts: {
+  file: File;
+  path: string;
+  contentType: string;
+  jwt: string;
+  onProgress: (pct: number) => void;
+}): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const upload = new tus.Upload(opts.file, {
+      endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        authorization: `Bearer ${opts.jwt}`,
+        apikey: SUPABASE_ANON,
+        "x-upsert": "false",
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        bucketName: BUCKET,
+        objectName: opts.path,
+        contentType: opts.contentType,
+        cacheControl: "3600",
+      },
+      chunkSize: TUS_CHUNK_SIZE,
+      onError: (err) => reject(err instanceof Error ? err : new Error(String(err))),
+      onProgress: (sent, total) => {
+        if (total > 0) opts.onProgress(Math.floor((sent / total) * 100));
+      },
+      onSuccess: () => resolve(),
+    });
+    upload.start();
+  });
+}
 
 function extFor(file: File): string {
   if (file.type === "video/mp4") return "mp4";
@@ -107,16 +152,32 @@ export default function ResenasClient() {
     setUploadPct(0);
     setError(null);
     try {
-      // 1) Upload directo browser → Supabase Storage (saltea Next.js y proxies).
+      // 1) Resolver JWT del usuario para autenticar el upload TUS.
+      const sess = await supabase.auth.getSession();
+      const jwt = sess.data.session?.access_token;
+      if (!jwt) {
+        setError("Tu sesión expiró. Recargá la página e ingresá de nuevo.");
+        return;
+      }
+      // 2) Upload por chunks (TUS resumable) directo a Supabase Storage.
+      //    Saltea Next.js, Coolify Traefik y cualquier corte de tamaño en
+      //    proxies upstream (Cloudflare) que rompía single-POST grandes.
       const videoId = (globalThis.crypto?.randomUUID?.() ?? "") ||
         `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
       const ext = extFor(f);
       const path = `${empresaId}/${videoId}/video.${ext}`;
-      const up = await supabase.storage
-        .from(BUCKET)
-        .upload(path, f, { contentType: fileType, upsert: false });
-      if (up.error) {
-        setError(`No se pudo subir el video. (${up.error.message.slice(0, 200)})`);
+      try {
+        await uploadViaTus({
+          file: f,
+          path,
+          contentType: fileType,
+          jwt,
+          onProgress: (pct) => setUploadPct(pct),
+        });
+      } catch (e) {
+        setError(
+          `No se pudo subir el video. (${e instanceof Error ? e.message : String(e)})`
+        );
         return;
       }
       setUploadPct(100);
