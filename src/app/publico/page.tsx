@@ -5,6 +5,7 @@ import { Promos } from "@/components/elevate-public/Promos";
 import { NewArrivals } from "@/components/elevate-public/NewArrivals";
 import { Reviews } from "@/components/elevate-public/Reviews";
 import { fetchCatalog } from "@/lib/elevate-public/catalog-fetch";
+import { fetchResenasVideos } from "@/lib/elevate-public/resenas-fetch";
 
 export const metadata = {
   title: "Elevate · Maison de Parfum — Perfumería Premium Original",
@@ -28,7 +29,10 @@ export const dynamic = "force-dynamic";
  * cuando la API falla o no devuelve productos.
  */
 export default async function ElevatePublicHome() {
-  const { products } = await fetchCatalog({ limit: 100 });
+  const [{ products }, resenasVideos] = await Promise.all([
+    fetchCatalog({ limit: 100 }),
+    fetchResenasVideos(),
+  ]);
 
   const bestsellers = products.filter((p) => p.bestseller).slice(0, 6);
   const promos = products.filter((p) => p.oldPrice != null);
@@ -40,7 +44,7 @@ export default async function ElevatePublicHome() {
       <Bestsellers products={bestsellers.length > 0 ? bestsellers : products.slice(0, 6)} />
       {promos.length > 0 && <Promos products={promos} />}
       {newArrivals.length > 0 && <NewArrivals products={newArrivals} />}
-      <Reviews />
+      <Reviews videos={resenasVideos} />
 
       <section className="py-24 lg:py-32 bg-cream/30">
         <div className="container mx-auto px-6 lg:px-10 text-center max-w-2xl">

@@ -33,6 +33,7 @@ import {
   ListChecks,
   FolderKanban,
   Percent,
+  Clapperboard,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -114,6 +115,7 @@ const MENU_STRUCTURE: MenuItem[] = [
   },
   { key: "ventas", slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
   { key: "pedidos-web", slug: "pedidos-web", label: "Pedidos Web", href: "/pedidos-web", icon: ShoppingCart },
+  { key: "resenas", slug: "resenas", label: "Reseñas", href: "/dashboard/resenas", icon: Clapperboard },
   { key: "inventario", slug: "inventario", label: "Inventario", href: "/inventario", icon: Package, children: [
     { label: "Productos", href: "/inventario" },
     { label: "Movimientos", href: "/inventario/movimientos" },
