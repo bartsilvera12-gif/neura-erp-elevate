@@ -30,12 +30,18 @@ export function Footer() {
     <footer className="bg-primary text-cream pt-20 pb-8">
       <div className="container mx-auto px-6 lg:px-10">
         <div className="grid md:grid-cols-4 gap-12 pb-12 border-b border-gold/20">
-          <div className="md:col-span-2 flex flex-col items-center md:items-start text-center md:text-left">
-            <Logo variant="light" size="lg" />
-            <p className="mt-6 text-cream/80 leading-relaxed max-w-md font-editorial italic text-xl">
-              La esencia de tu próximo negocio. Fragancias seleccionadas para quienes buscan elegancia,
-              presencia y exclusividad.
-            </p>
+          <div className="md:col-span-2 flex justify-center md:justify-start">
+            {/* Wrapper de ancho compartido para que el logo y el párrafo
+                arranquen exactamente en el mismo x — sin esto, cada uno se
+                centra solo en su columna y sus bordes izquierdos quedan
+                desalineados. */}
+            <div className="w-full max-w-md">
+              <Logo variant="light" size="lg" />
+              <p className="mt-6 text-cream/80 leading-relaxed font-editorial italic text-xl">
+                La esencia de tu próximo negocio. Fragancias seleccionadas para quienes buscan elegancia,
+                presencia y exclusividad.
+              </p>
+            </div>
           </div>
 
           <div>
