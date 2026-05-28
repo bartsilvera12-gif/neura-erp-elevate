@@ -22,10 +22,9 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import {
   ALLOWED_VIDEO_MIME,
-  MAX_VIDEO_BYTES,
   MAX_VIDEOS_VISIBLES,
   RESENAS_VIDEOS_BUCKET,
-  buildResenaVideoPath,
+  isManagedResenaPath,
   publicResenaVideoUrl,
 } from "@/lib/resenas/storage";
 
@@ -81,7 +80,12 @@ export async function GET(request: NextRequest) {
       });
     }
     return NextResponse.json(
-      successResponse({ videos: r.rows, max: MAX_VIDEOS_VISIBLES })
+      successResponse({
+        videos: r.rows,
+        max: MAX_VIDEOS_VISIBLES,
+        empresa_id: ctx.auth.empresa_id,
+        bucket: "resenas-videos",
+      })
     );
   } catch (err) {
     console.error("[/api/resenas-videos GET] outer", err);
@@ -91,6 +95,24 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * POST /api/resenas-videos — registra el metadata de un video YA subido
+ * directamente a Supabase Storage por el navegador.
+ *
+ * Body JSON:
+ *   {
+ *     video_path: "{empresa_id}/{video_id}/video.{ext}"
+ *     mime?: "video/mp4" | "video/webm" | "video/quicktime"
+ *     titulo?: string
+ *     descripcion?: string
+ *   }
+ *
+ * El upload del bytes lo hace el browser con el JWT del usuario contra el
+ * bucket público `resenas-videos`. Eso saltea el body limit de Next.js y de
+ * cualquier proxy intermedio (Coolify Traefik, Cloudflare). El server solo
+ * valida que el path empieza con el empresa_id del usuario autenticado y que
+ * el objeto realmente existe en el bucket antes de insertar la fila.
+ */
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getTenantSupabaseFromAuth(request);
@@ -99,7 +121,7 @@ export async function POST(request: NextRequest) {
     const empresaId = ctx.auth.empresa_id;
     const jwt = await getAccessTokenForRequest(request);
 
-    // 1) Gate temprano: contar visibles+activos antes de leer bytes.
+    // 1) Gate: count < 4 visibles+activos
     const qsCount = new URLSearchParams({
       select: "id",
       empresa_id: `eq.${empresaId}`,
@@ -125,48 +147,71 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2) Validar archivo
-    const form = await request.formData();
-    const file = form.get("file");
-    const titulo = (form.get("titulo") ?? "").toString().trim() || null;
-    const descripcion = (form.get("descripcion") ?? "").toString().trim() || null;
-    if (!(file instanceof File)) {
-      return NextResponse.json(errorResponse("Falta el archivo (campo 'file')."), {
-        status: 400,
-      });
+    // 2) Parsear y validar metadata JSON
+    const body = (await request.json().catch(() => null)) as {
+      video_path?: string;
+      mime?: string;
+      titulo?: string;
+      descripcion?: string;
+    } | null;
+    if (!body || typeof body.video_path !== "string" || body.video_path.length === 0) {
+      return NextResponse.json(
+        errorResponse("Falta video_path (el archivo debe subirse antes a Storage)."),
+        { status: 400 }
+      );
     }
-    if (!ALLOWED_VIDEO_MIME.has(file.type)) {
+    const path = body.video_path.trim();
+    const mime = (body.mime ?? "").trim().toLowerCase();
+    const titulo =
+      typeof body.titulo === "string" && body.titulo.trim().length > 0
+        ? body.titulo.trim()
+        : null;
+    const descripcion =
+      typeof body.descripcion === "string" && body.descripcion.trim().length > 0
+        ? body.descripcion.trim()
+        : null;
+
+    if (mime && !ALLOWED_VIDEO_MIME.has(mime)) {
+      return NextResponse.json(
+        errorResponse("Formato no permitido. Usá MP4 (recomendado), WebM o MOV."),
+        { status: 400 }
+      );
+    }
+    if (!isManagedResenaPath(path, empresaId)) {
       return NextResponse.json(
         errorResponse(
-          "Formato no permitido. Usá MP4 (recomendado), WebM o MOV."
+          "Ruta inválida: el video_path debe pertenecer a tu empresa."
         ),
         { status: 400 }
       );
     }
-    if (file.size > MAX_VIDEO_BYTES) {
-      const mb = (MAX_VIDEO_BYTES / 1024 / 1024).toFixed(0);
-      return NextResponse.json(errorResponse(`Video demasiado grande (máx. ${mb} MB).`), {
-        status: 413,
-      });
+
+    // 3) Verificar que el objeto realmente está en el bucket (defensa
+    //    contra registros sin archivo). Si la verificación falla por error
+    //    de red, seguimos — el cliente ya recibió OK del upload.
+    const storage = storageClientWithJwt(jwt);
+    try {
+      const dirParts = path.split("/");
+      const filename = dirParts.pop()!;
+      const dir = dirParts.join("/");
+      const lst = await storage.storage
+        .from(RESENAS_VIDEOS_BUCKET)
+        .list(dir, { limit: 10, search: filename });
+      if (!lst.error) {
+        const found = (lst.data ?? []).some((o) => o.name === filename);
+        if (!found) {
+          return NextResponse.json(
+            errorResponse(
+              "El video no se encuentra en Storage. Reintentá la carga."
+            ),
+            { status: 400 }
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("[/api/resenas-videos POST] storage.list fallo (continúo)", e);
     }
 
-    // 3) Pre-generar id para path estable
-    const videoId = (globalThis.crypto?.randomUUID?.() ?? "") || cryptoFallback();
-    const path = buildResenaVideoPath(empresaId, videoId, file.type);
-    const storage = storageClientWithJwt(jwt);
-    const buf = Buffer.from(await file.arrayBuffer());
-    const up = await storage.storage
-      .from(RESENAS_VIDEOS_BUCKET)
-      .upload(path, buf, { contentType: file.type, upsert: false });
-    if (up.error) {
-      console.error("[/api/resenas-videos POST] upload", up.error.message);
-      return NextResponse.json(
-        errorResponse(
-          `No se pudo subir el video. (storage_upload_failed · ${up.error.message.slice(0, 120)})`
-        ),
-        { status: 502 }
-      );
-    }
     const publicUrl = publicResenaVideoUrl(path) ?? "";
 
     // 4) Orden = primer slot 0..3 libre entre los videos visibles+activos.
@@ -190,7 +235,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 5) Insert
+    // 5) Derivar video_id desde el segmento medio del path (estable).
+    //    path = {empresa_id}/{video_id}/video.{ext}
+    const segs = path.split("/").filter(Boolean);
+    const videoId =
+      segs.length >= 2 && /^[0-9a-f-]{8,}$/i.test(segs[1])
+        ? segs[1]
+        : (globalThis.crypto?.randomUUID?.() ?? "") || cryptoFallback();
+
+    // 6) Insert
     const insertBody = {
       id: videoId,
       empresa_id: empresaId,

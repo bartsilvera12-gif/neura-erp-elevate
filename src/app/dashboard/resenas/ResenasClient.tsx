@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clapperboard, Trash2, Upload, AlertCircle } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { supabase } from "@/lib/supabase";
+
+const BUCKET = "resenas-videos";
+
+function extFor(file: File): string {
+  if (file.type === "video/mp4") return "mp4";
+  if (file.type === "video/webm") return "webm";
+  if (file.type === "video/quicktime") return "mov";
+  // Fallback por extensión del nombre.
+  const m = /\.([a-z0-9]+)$/i.exec(file.name);
+  return (m?.[1] ?? "mp4").toLowerCase();
+}
 
 type ResenaVideo = {
   id: string;
@@ -26,8 +38,10 @@ const MIME_RE = /^video\/(mp4|webm|quicktime)$/i;
 
 export default function ResenasClient() {
   const [videos, setVideos] = useState<ResenaVideo[]>([]);
+  const [empresaId, setEmpresaId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [titulo, setTitulo] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -38,7 +52,15 @@ export default function ResenasClient() {
     try {
       const r = await fetchWithSupabaseSession("/api/resenas-videos", { cache: "no-store" });
       const body = (await r.json()) as
-        | { success: true; data: { videos: ResenaVideo[]; max: number } }
+        | {
+            success: true;
+            data: {
+              videos: ResenaVideo[];
+              max: number;
+              empresa_id: string;
+              bucket: string;
+            };
+          }
         | { success: false; error: string };
       if (!r.ok || !("success" in body) || body.success === false) {
         setError(("success" in body && body.success === false ? body.error : null) || "No se pudo cargar.");
@@ -46,6 +68,7 @@ export default function ResenasClient() {
         return;
       }
       setVideos(body.data.videos);
+      setEmpresaId(body.data.empresa_id);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error de red");
     } finally {
@@ -65,31 +88,59 @@ export default function ResenasClient() {
       setError("Seleccioná un video primero.");
       return;
     }
+    if (!empresaId) {
+      setError("No se pudo resolver tu empresa. Recargá la página.");
+      return;
+    }
     if (f.size > MAX_BYTES) {
       setError(`El video supera el máximo de ${(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.`);
       return;
     }
     // Algunos browsers no setean file.type para .mov; aceptar por extensión.
     const looksMov = /\.mov$/i.test(f.name);
-    if (!MIME_RE.test(f.type) && !looksMov) {
+    const fileType = f.type || (looksMov ? "video/quicktime" : "");
+    if (!MIME_RE.test(fileType)) {
       setError("Formato no permitido. Usá MP4 (recomendado), WebM o MOV.");
       return;
     }
     setUploading(true);
+    setUploadPct(0);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", f);
-      if (titulo.trim()) fd.append("titulo", titulo.trim());
+      // 1) Upload directo browser → Supabase Storage (saltea Next.js y proxies).
+      const videoId = (globalThis.crypto?.randomUUID?.() ?? "") ||
+        `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+      const ext = extFor(f);
+      const path = `${empresaId}/${videoId}/video.${ext}`;
+      const up = await supabase.storage
+        .from(BUCKET)
+        .upload(path, f, { contentType: fileType, upsert: false });
+      if (up.error) {
+        setError(`No se pudo subir el video. (${up.error.message.slice(0, 200)})`);
+        return;
+      }
+      setUploadPct(100);
+      // 2) Registrar metadata via API (JSON, sin archivo).
       const r = await fetchWithSupabaseSession("/api/resenas-videos", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          video_path: path,
+          mime: fileType,
+          titulo: titulo.trim() || undefined,
+        }),
       });
       const body = (await r.json()) as
         | { success: true; data: { video: ResenaVideo } }
         | { success: false; error: string };
       if (!r.ok || !("success" in body) || body.success === false) {
-        setError(("success" in body && body.success === false ? body.error : null) || "No se pudo subir.");
+        // Si la API falla, intentar limpiar el objeto storage.
+        try {
+          await supabase.storage.from(BUCKET).remove([path]);
+        } catch {
+          /* best-effort */
+        }
+        setError(("success" in body && body.success === false ? body.error : null) || "No se pudo registrar el video.");
         return;
       }
       setVideos((prev) => [...prev, body.data.video].sort((a, b) => a.orden - b.orden));
@@ -99,6 +150,7 @@ export default function ResenasClient() {
       setError(e instanceof Error ? e.message : "Error de red");
     } finally {
       setUploading(false);
+      setUploadPct(null);
     }
   };
 
@@ -189,7 +241,11 @@ export default function ResenasClient() {
               className="inline-flex h-fit items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-60 dark:bg-amber-500 dark:hover:bg-amber-600"
             >
               <Upload className="h-4 w-4" />
-              {uploading ? "Subiendo…" : "Subir video"}
+              {uploading
+                ? uploadPct != null && uploadPct < 100
+                  ? `Subiendo… ${uploadPct}%`
+                  : "Subiendo…"
+                : "Subir video"}
             </button>
           </form>
         )}
