@@ -30,7 +30,7 @@ export function Footer() {
     <footer className="bg-primary text-cream pt-20 pb-8">
       <div className="container mx-auto px-6 lg:px-10">
         <div className="grid md:grid-cols-4 gap-12 pb-12 border-b border-gold/20">
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex flex-col items-center md:items-start text-center md:text-left">
             <Logo variant="light" size="lg" />
             <p className="mt-6 text-cream/80 leading-relaxed max-w-md font-editorial italic text-xl">
               La esencia de tu próximo negocio. Fragancias seleccionadas para quienes buscan elegancia,
