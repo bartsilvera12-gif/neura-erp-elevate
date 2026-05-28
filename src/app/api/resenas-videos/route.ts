@@ -226,10 +226,12 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json(successResponse({ video: r.rows[0] }), { status: 201 });
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err ?? "");
     console.error("[/api/resenas-videos POST] outer", err);
-    return NextResponse.json(errorResponse("No se pudo subir el video."), {
-      status: 500,
-    });
+    return NextResponse.json(
+      errorResponse(`No se pudo subir el video. (${msg.slice(0, 200)})`),
+      { status: 500 }
+    );
   }
 }
 
