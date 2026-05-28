@@ -20,7 +20,9 @@ type ResenaVideo = {
 };
 
 const MAX_VIDEOS = 4;
-const MAX_BYTES = 100 * 1024 * 1024;
+const MAX_BYTES = 200 * 1024 * 1024;
+const ACCEPT_ATTR = "video/mp4,video/webm,video/quicktime,.mov";
+const MIME_RE = /^video\/(mp4|webm|quicktime)$/i;
 
 export default function ResenasClient() {
   const [videos, setVideos] = useState<ResenaVideo[]>([]);
@@ -67,8 +69,10 @@ export default function ResenasClient() {
       setError(`El video supera el máximo de ${(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.`);
       return;
     }
-    if (!/^video\/(mp4|webm)$/i.test(f.type)) {
-      setError("Formato no permitido. Usá MP4 o WebM.");
+    // Algunos browsers no setean file.type para .mov; aceptar por extensión.
+    const looksMov = /\.mov$/i.test(f.name);
+    if (!MIME_RE.test(f.type) && !looksMov) {
+      setError("Formato no permitido. Usá MP4 (recomendado), WebM o MOV.");
       return;
     }
     setUploading(true);
@@ -166,11 +170,17 @@ export default function ResenasClient() {
               <input
                 ref={fileRef}
                 type="file"
-                accept="video/mp4,video/webm"
+                accept={ACCEPT_ATTR}
                 className="block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-amber-500 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-amber-600 dark:text-slate-300"
               />
               <p className="text-xs text-slate-500">
-                MP4 o WebM, máximo {(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.
+                MP4 (recomendado), WebM o MOV — máximo{" "}
+                {(MAX_BYTES / 1024 / 1024).toFixed(0)} MB.
+              </p>
+              <p className="text-xs text-slate-400">
+                Tip: los MOV se ven bien en Safari/iPhone, pero algunos
+                navegadores (Firefox y ciertos Chrome) pueden no reproducirlos.
+                Si querés máxima compatibilidad en la web pública, usá MP4.
               </p>
             </div>
             <button

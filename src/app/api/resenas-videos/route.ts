@@ -137,7 +137,9 @@ export async function POST(request: NextRequest) {
     }
     if (!ALLOWED_VIDEO_MIME.has(file.type)) {
       return NextResponse.json(
-        errorResponse("Formato no permitido. Usá MP4 o WebM."),
+        errorResponse(
+          "Formato no permitido. Usá MP4 (recomendado), WebM o MOV."
+        ),
         { status: 400 }
       );
     }

@@ -10,12 +10,17 @@
 
 export const RESENAS_VIDEOS_BUCKET = "resenas-videos";
 
-export const ALLOWED_VIDEO_MIME = new Set(["video/mp4", "video/webm"]);
+export const ALLOWED_VIDEO_MIME = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+]);
 export const ALLOWED_VIDEO_EXT: Record<string, string> = {
   "video/mp4": "mp4",
   "video/webm": "webm",
+  "video/quicktime": "mov",
 };
-export const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200 MB
 
 export const MAX_VIDEOS_VISIBLES = 4;
 
