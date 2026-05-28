@@ -3,53 +3,67 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clapperboard, Trash2, Upload, AlertCircle } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { supabase } from "@/lib/supabase";
-import * as tus from "tus-js-client";
 
-const BUCKET = "resenas-videos";
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
-const SUPABASE_ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 /**
- * Upload por chunks (TUS resumable). 6 MB es el tamaño recomendado por
- * Supabase Storage para el endpoint /storage/v1/upload/resumable. Cada chunk
- * es una request independiente, así que cualquier proxy intermedio
- * (Cloudflare, Traefik) no corta el upload de archivos grandes.
+ * Chunks de 6 MB. El upload pasa por /api/resenas-videos/chunk (mismo
+ * origen, sin CORS) y cada chunk es lo bastante chico para pasar
+ * Cloudflare (free tier corta requests >100 MB).
  */
-const TUS_CHUNK_SIZE = 6 * 1024 * 1024;
+const CHUNK_SIZE = 6 * 1024 * 1024;
 
-async function uploadViaTus(opts: {
+async function uploadChunked(opts: {
   file: File;
-  path: string;
-  contentType: string;
-  jwt: string;
+  uploadId: string;
+  ext: string;
+  mime: string;
   onProgress: (pct: number) => void;
-}): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(opts.file, {
-      endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      headers: {
-        authorization: `Bearer ${opts.jwt}`,
-        apikey: SUPABASE_ANON,
-        "x-upsert": "false",
-      },
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: BUCKET,
-        objectName: opts.path,
-        contentType: opts.contentType,
-        cacheControl: "3600",
-      },
-      chunkSize: TUS_CHUNK_SIZE,
-      onError: (err) => reject(err instanceof Error ? err : new Error(String(err))),
-      onProgress: (sent, total) => {
-        if (total > 0) opts.onProgress(Math.floor((sent / total) * 100));
-      },
-      onSuccess: () => resolve(),
+}): Promise<{ video_path: string }> {
+  const { file, uploadId, ext, mime } = opts;
+  const total = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  for (let i = 0; i < total; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const slice = file.slice(start, end);
+    const isFinal = i === total - 1;
+
+    const fd = new FormData();
+    fd.append("uploadId", uploadId);
+    fd.append("chunkIndex", String(i));
+    fd.append("chunkTotal", String(total));
+    fd.append("ext", ext);
+    fd.append("mime", mime);
+    fd.append("final", isFinal ? "true" : "false");
+    fd.append("file", slice, `chunk-${i}`);
+
+    const r = await fetchWithSupabaseSession("/api/resenas-videos/chunk", {
+      method: "POST",
+      body: fd,
     });
-    upload.start();
-  });
+    const txt = await r.text();
+    let body: { success: true; data: unknown } | { success: false; error: string };
+    try {
+      body = JSON.parse(txt);
+    } catch {
+      throw new Error(
+        `chunk ${i + 1}/${total} respuesta inesperada (HTTP ${r.status})`
+      );
+    }
+    if (!r.ok || !("success" in body) || body.success === false) {
+      throw new Error(
+        ("success" in body && body.success === false && body.error) ||
+          `chunk ${i + 1}/${total} falló (HTTP ${r.status})`
+      );
+    }
+    opts.onProgress(Math.floor(((i + 1) / total) * 100));
+    if (isFinal) {
+      const data = (body as { success: true; data: { video_path?: string } }).data;
+      if (!data?.video_path) {
+        throw new Error("Upload completado pero el server no devolvió video_path.");
+      }
+      return { video_path: data.video_path };
+    }
+  }
+  throw new Error("Upload terminó sin chunk final.");
 }
 
 function extFor(file: File): string {
@@ -152,28 +166,23 @@ export default function ResenasClient() {
     setUploadPct(0);
     setError(null);
     try {
-      // 1) Resolver JWT del usuario para autenticar el upload TUS.
-      const sess = await supabase.auth.getSession();
-      const jwt = sess.data.session?.access_token;
-      if (!jwt) {
-        setError("Tu sesión expiró. Recargá la página e ingresá de nuevo.");
-        return;
-      }
-      // 2) Upload por chunks (TUS resumable) directo a Supabase Storage.
-      //    Saltea Next.js, Coolify Traefik y cualquier corte de tamaño en
-      //    proxies upstream (Cloudflare) que rompía single-POST grandes.
-      const videoId = (globalThis.crypto?.randomUUID?.() ?? "") ||
+      // 1) Upload chunked: cada chunk es <= 6 MB, pasa por /api/.../chunk
+      //    en la misma origen. El último chunk dispara el upload server→
+      //    Supabase Storage (TUS server-to-server, sin CORS).
+      const uploadId =
+        (globalThis.crypto?.randomUUID?.() ?? "") ||
         `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
       const ext = extFor(f);
-      const path = `${empresaId}/${videoId}/video.${ext}`;
+      let video_path: string;
       try {
-        await uploadViaTus({
+        const r = await uploadChunked({
           file: f,
-          path,
-          contentType: fileType,
-          jwt,
+          uploadId,
+          ext,
+          mime: fileType,
           onProgress: (pct) => setUploadPct(pct),
         });
+        video_path = r.video_path;
       } catch (e) {
         setError(
           `No se pudo subir el video. (${e instanceof Error ? e.message : String(e)})`
@@ -181,12 +190,12 @@ export default function ResenasClient() {
         return;
       }
       setUploadPct(100);
-      // 2) Registrar metadata via API (JSON, sin archivo).
+      // 2) Registrar metadata
       const r = await fetchWithSupabaseSession("/api/resenas-videos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          video_path: path,
+          video_path,
           mime: fileType,
           titulo: titulo.trim() || undefined,
         }),
@@ -195,12 +204,6 @@ export default function ResenasClient() {
         | { success: true; data: { video: ResenaVideo } }
         | { success: false; error: string };
       if (!r.ok || !("success" in body) || body.success === false) {
-        // Si la API falla, intentar limpiar el objeto storage.
-        try {
-          await supabase.storage.from(BUCKET).remove([path]);
-        } catch {
-          /* best-effort */
-        }
         setError(("success" in body && body.success === false ? body.error : null) || "No se pudo registrar el video.");
         return;
       }
