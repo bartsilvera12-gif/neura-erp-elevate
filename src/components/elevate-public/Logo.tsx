@@ -14,8 +14,12 @@ export function Logo({
   size?: "md" | "lg";
 }) {
   const isLg = size === "lg";
+  // El PNG del logo tiene whitespace interno a la izquierda (la botellita
+  // está dibujada sin tocar el borde). Para que el contenido visual del
+  // logo arranque en el mismo eje que el texto que viene debajo (cuando
+  // se usa size="lg" en el footer), compensamos con un margen negativo.
   const imgClass = isLg
-    ? "h-28 w-28 md:h-36 md:w-36 object-contain"
+    ? "h-28 w-28 md:h-36 md:w-36 object-contain -ml-3 md:-ml-4"
     : "h-20 w-20 md:h-24 md:w-24 object-contain";
   const titleClass = isLg
     ? "font-display text-3xl md:text-4xl tracking-[0.18em]"

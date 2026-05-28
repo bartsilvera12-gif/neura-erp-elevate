@@ -260,7 +260,7 @@ export function ProductDetailClient({
               {tienePresentaciones && (
                 <div className="mt-6">
                   <h2 className="text-[11px] tracking-[0.3em] uppercase text-gold mb-3">Volumen</h2>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {presentaciones.map((pres) => {
                       const elegida = pres.id === presentacionIdSeleccionada;
                       const noStock = !pres.disponible;
@@ -270,16 +270,19 @@ export function ProductDetailClient({
                           type="button"
                           onClick={() => setPresentacionIdSeleccionada(pres.id)}
                           disabled={noStock}
-                          className={`px-4 py-2 text-xs tracking-[0.2em] uppercase border transition-elegant ${
+                          className={`flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-full border text-[11px] tracking-[0.2em] uppercase transition-elegant ${
                             elegida
-                              ? "bg-primary text-primary-foreground border-primary"
+                              ? "bg-primary text-primary-foreground border-primary shadow-elegant"
                               : "border-border text-foreground/80 hover:border-gold hover:text-primary"
                           } ${noStock ? "opacity-50 cursor-not-allowed" : ""}`}
                           aria-pressed={elegida}
                           title={noStock ? "Sin stock" : `${pres.volumen_ml} ml`}
                         >
-                          {pres.volumen_ml} ml
-                          {noStock && <span className="ml-1 text-[10px]">(s/stock)</span>}
+                          <span className="font-display text-base tracking-normal normal-case leading-none">
+                            {pres.volumen_ml}
+                          </span>
+                          <span className="mt-1 text-[10px] tracking-[0.25em]">ml</span>
+                          {noStock && <span className="mt-0.5 text-[9px]">s/stock</span>}
                         </button>
                       );
                     })}
