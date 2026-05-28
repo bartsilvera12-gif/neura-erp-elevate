@@ -19,31 +19,33 @@ const fallbackTextos = [
 function gridColsFor(n: number): string {
   if (n <= 1) return "grid-cols-1 max-w-md mx-auto";
   if (n === 2) return "grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto";
-  if (n === 3) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-5xl mx-auto";
-  return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto";
+  if (n === 3) return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto";
+  // 4 videos: usar todo el ancho del wrapper grande para que se vean al
+  // máximo, con un cap defensivo de ~1500 px para pantallas muy anchas.
+  return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-[1500px] mx-auto";
 }
 
 export function Reviews({ videos = [] }: { videos?: ResenaVideo[] }) {
   const tieneVideos = videos.length > 0;
   return (
     <section id="resenas" className="py-24 lg:py-32 bg-cream/30">
-      <div className="container mx-auto px-6 lg:px-10">
+      {/* Wrapper más fino que el resto del sitio en sus paddings laterales
+          para que los 4 videos puedan estirarse más hacia los bordes en
+          desktop sin romper la grilla del resto de la home. */}
+      <div className="mx-auto px-3 sm:px-4 lg:px-8">
         <SectionTitle
           eyebrow="Reseñas"
           title="Clientes que ya elevaron su esencia"
-          subtitle={
-            tieneVideos
-              ? "Voces de quienes ya confían en nuestra curaduría."
-              : "Voces de quienes ya confían en nuestra curaduría."
-          }
+          subtitle="Voces de quienes ya confían en nuestra curaduría."
         />
         {tieneVideos ? (
-          <div className={`mt-14 grid gap-6 ${gridColsFor(videos.length)}`}>
+          <div className={`mt-14 grid gap-4 lg:gap-5 ${gridColsFor(videos.length)}`}>
             {videos.map((v) => (
               <figure
                 key={v.id}
-                className="bg-background border border-border/60 shadow-soft hover:shadow-elegant transition-elegant overflow-hidden"
+                className="bg-black border border-border/60 shadow-soft hover:shadow-elegant transition-elegant overflow-hidden"
               >
+                {/* Card = solo el video, sin caption blanca debajo. */}
                 <div className="relative aspect-[9/16] bg-black">
                   <video
                     src={v.video_url}
@@ -55,23 +57,11 @@ export function Reviews({ videos = [] }: { videos?: ResenaVideo[] }) {
                     className="h-full w-full object-cover"
                   />
                 </div>
-                {(v.titulo || v.descripcion) && (
-                  <figcaption className="p-5 lg:p-6">
-                    {v.titulo && (
-                      <div className="font-display text-lg text-primary">{v.titulo}</div>
-                    )}
-                    {v.descripcion && (
-                      <p className="font-editorial italic text-sm text-foreground/80 leading-relaxed mt-1">
-                        {v.descripcion}
-                      </p>
-                    )}
-                  </figcaption>
-                )}
               </figure>
             ))}
           </div>
         ) : (
-          <div className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+          <div className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto px-3 lg:px-2">
             {fallbackTextos.map((r) => (
               <figure
                 key={r.name}
