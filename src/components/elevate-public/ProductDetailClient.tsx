@@ -270,7 +270,7 @@ export function ProductDetailClient({
                           type="button"
                           onClick={() => setPresentacionIdSeleccionada(pres.id)}
                           disabled={noStock}
-                          className={`flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-full border text-[11px] tracking-[0.2em] uppercase transition-elegant ${
+                          className={`flex flex-col items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-full border text-[10px] tracking-[0.15em] uppercase transition-elegant ${
                             elegida
                               ? "bg-primary text-primary-foreground border-primary shadow-elegant"
                               : "border-border text-foreground/80 hover:border-gold hover:text-primary"
@@ -278,11 +278,11 @@ export function ProductDetailClient({
                           aria-pressed={elegida}
                           title={noStock ? "Sin stock" : `${pres.volumen_ml} ml`}
                         >
-                          <span className="font-display text-base tracking-normal normal-case leading-none">
+                          <span className="font-display text-sm tracking-normal normal-case leading-none">
                             {pres.volumen_ml}
                           </span>
-                          <span className="mt-1 text-[10px] tracking-[0.25em]">ml</span>
-                          {noStock && <span className="mt-0.5 text-[9px]">s/stock</span>}
+                          <span className="mt-0.5 text-[8px] tracking-[0.2em]">ml</span>
+                          {noStock && <span className="mt-0.5 text-[8px]">s/stock</span>}
                         </button>
                       );
                     })}
