@@ -2,18 +2,17 @@ import Image from "next/image";
 import Link from "next/link";
 
 /**
- * Hero pública Elevate. Asset en `public/brand/elevate/hero-perfume.jpg`.
- *
- * Diferencias respecto a la repo Vite original:
- *   - `react-router-dom` → `next/link`.
- *   - `<img>` con import → `next/image` con path estático.
+ * Hero pública Elevate.
+ * Asset activo: `public/brand/elevate/hero-perfume-v2.png`.
+ * Backup del anterior queda en `public/brand/elevate/hero-perfume.jpg`
+ * por si hay que revertir.
  */
 export function Hero() {
   return (
     <section id="top" className="relative min-h-screen flex items-center overflow-hidden">
       <div className="absolute inset-0">
         <Image
-          src="/brand/elevate/hero-perfume.jpg"
+          src="/brand/elevate/hero-perfume-v2.png"
           alt="Perfume de lujo Elevate"
           fill
           priority
