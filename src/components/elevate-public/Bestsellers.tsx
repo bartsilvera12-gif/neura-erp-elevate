@@ -1,4 +1,4 @@
-import { ProductCard } from "./ProductCard";
+import { BestsellerCard } from "./BestsellerCard";
 import { SectionTitle } from "./SectionTitle";
 import type { Product } from "@/lib/elevate-public/products-mock";
 
@@ -38,10 +38,10 @@ export function Bestsellers({ products }: { products: Product[] }) {
           {loop.map((p, i) => (
             <li
               key={`${p.id}-${i}`}
-              className="bestseller-marquee__item flex shrink-0 pr-7 w-[75vw] sm:w-[300px] lg:w-[330px]"
+              className="bestseller-marquee__item flex shrink-0 pr-3 sm:pr-4 w-[80vw] sm:w-[300px] lg:w-[320px]"
               aria-hidden={i >= oneCopy.length ? true : undefined}
             >
-              <ProductCard product={p} />
+              <BestsellerCard product={p} />
             </li>
           ))}
         </ul>

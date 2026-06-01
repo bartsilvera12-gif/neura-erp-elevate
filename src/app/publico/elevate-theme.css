@@ -157,6 +157,15 @@
   background: linear-gradient(to left, var(--background), transparent);
 }
 
+/* Carrusel de reseñas (videos): scroll horizontal con snap, sin barra visible. */
+.elevate-public-theme .reviews-scroller {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.elevate-public-theme .reviews-scroller::-webkit-scrollbar {
+  display: none;
+}
+
 /* Tarjetas promo: float + glow + sheen */
 @keyframes elevate-promo-float {
   0%, 100% { transform: translateY(0); }
