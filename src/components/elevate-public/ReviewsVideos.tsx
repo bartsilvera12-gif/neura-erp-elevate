@@ -14,6 +14,7 @@ import type { ResenaVideo } from "./Reviews";
  */
 export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const [unmutedId, setUnmutedId] = useState<string | null>(null);
 
   const scrollByCards = (dir: 1 | -1) => {
@@ -28,21 +29,33 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     setUnmutedId((cur) => (cur === id ? null : id));
   };
 
-  // En mobile los videos se ven de a uno con scroll-snap. Cuando el usuario
-  // desplaza y el video con sonido sale de vista, lo silenciamos solo para que
-  // no se escuche un audio "fuera de pantalla". Observamos visibilidad dentro
-  // del propio scroller; al caer por debajo del umbral, si era el desmuteado,
-  // lo muteamos.
+  // En mobile los videos se ven de a uno con scroll-snap (estilo reels).
+  // Observamos la visibilidad dentro del propio scroller:
+  //  - Cuando un video entra en vista (centrado), activamos su sonido y nos
+  //    aseguramos de que esté reproduciéndose.
+  //  - Cuando sale de vista, lo pausamos y lo silenciamos para que no quede un
+  //    audio sonando "fuera de pantalla".
+  // En desktop se ven varios a la vez, así que NO auto-activamos sonido ni
+  // pausamos: solo mantenemos el silenciado al salir de vista (toggle manual).
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
+    const isMobile = window.matchMedia("(max-width: 639px)").matches;
     const cards = root.querySelectorAll<HTMLElement>("[data-review-card]");
     const obs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.intersectionRatio < 0.6) {
-            const id = (e.target as HTMLElement).dataset.reviewId;
-            setUnmutedId((cur) => (cur && cur === id ? null : cur));
+          const id = (e.target as HTMLElement).dataset.reviewId;
+          if (!id) continue;
+          const vid = videoRefs.current.get(id);
+          if (e.intersectionRatio >= 0.6) {
+            if (isMobile) {
+              setUnmutedId(id);
+              vid?.play().catch(() => {});
+            }
+          } else {
+            if (isMobile) vid?.pause();
+            setUnmutedId((cur) => (cur === id ? null : cur));
           }
         }
       },
@@ -86,6 +99,10 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
             >
               <div className="relative aspect-[9/16] bg-black">
                 <video
+                  ref={(el) => {
+                    if (el) videoRefs.current.set(v.id, el);
+                    else videoRefs.current.delete(v.id);
+                  }}
                   src={v.video_url}
                   poster={v.poster_url ?? undefined}
                   autoPlay
