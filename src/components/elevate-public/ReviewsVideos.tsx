@@ -29,40 +29,84 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     setUnmutedId((cur) => (cur === id ? null : id));
   };
 
-  // En mobile los videos se ven de a uno con scroll-snap (estilo reels).
-  // Observamos la visibilidad dentro del propio scroller:
-  //  - Cuando un video entra en vista (centrado), activamos su sonido y nos
-  //    aseguramos de que esté reproduciéndose.
-  //  - Cuando sale de vista, lo pausamos y lo silenciamos para que no quede un
-  //    audio sonando "fuera de pantalla".
-  // En desktop se ven varios a la vez, así que NO auto-activamos sonido ni
-  // pausamos: solo mantenemos el silenciado al salir de vista (toggle manual).
+  // En mobile los videos se ven de a uno (scroll-snap), estilo reels:
+  //  - El video centrado se reproduce; el resto queda pausado.
+  //  - El centrado lleva sonido. Las políticas del navegador impiden audio sin
+  //    una interacción previa del usuario, así que el PRIMER gesto (tap o swipe)
+  //    "desbloquea" el sonido del video centrado; a partir de ahí es automático
+  //    al cambiar de video.
+  // En desktop se ven varios a la vez: no auto-reproducimos con sonido ni
+  // pausamos; solo silenciamos un video al salir de vista (toggle manual).
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
     const isMobile = window.matchMedia("(max-width: 639px)").matches;
-    const cards = root.querySelectorAll<HTMLElement>("[data-review-card]");
+    const cards = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-review-card]"),
+    );
+
+    if (!isMobile) {
+      const obs = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.intersectionRatio < 0.6) {
+              const id = (e.target as HTMLElement).dataset.reviewId;
+              setUnmutedId((cur) => (cur === id ? null : cur));
+            }
+          }
+        },
+        { root, threshold: [0.6] },
+      );
+      cards.forEach((c) => obs.observe(c));
+      return () => obs.disconnect();
+    }
+
+    let activeId: string | null = null;
+    let unlocked = false;
+
+    // Reproduce el video activo (pausando el resto) y, si el sonido ya está
+    // desbloqueado, lo desmutea.
+    const apply = () => {
+      for (const c of cards) {
+        const cid = c.dataset.reviewId;
+        const vid = cid ? videoRefs.current.get(cid) : null;
+        if (!vid) continue;
+        if (cid === activeId) vid.play().catch(() => {});
+        else vid.pause();
+      }
+      setUnmutedId(unlocked ? activeId : null);
+    };
+
     const obs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           const id = (e.target as HTMLElement).dataset.reviewId;
           if (!id) continue;
-          const vid = videoRefs.current.get(id);
-          if (e.intersectionRatio >= 0.6) {
-            if (isMobile) {
-              setUnmutedId(id);
-              vid?.play().catch(() => {});
-            }
-          } else {
-            if (isMobile) vid?.pause();
-            setUnmutedId((cur) => (cur === id ? null : cur));
-          }
+          if (e.intersectionRatio >= 0.6) activeId = id;
+          else if (activeId === id) activeId = null;
         }
+        apply();
       },
       { root, threshold: [0.6] },
     );
     cards.forEach((c) => obs.observe(c));
-    return () => obs.disconnect();
+
+    // Primer gesto del usuario en cualquier parte → desbloquea el audio del
+    // video centrado. Un solo listener: se autodestruye al dispararse.
+    const ac = new AbortController();
+    const unlock = () => {
+      unlocked = true;
+      apply();
+      ac.abort();
+    };
+    for (const ev of ["pointerdown", "touchend", "keydown"] as const) {
+      window.addEventListener(ev, unlock, { signal: ac.signal });
+    }
+
+    return () => {
+      obs.disconnect();
+      ac.abort();
+    };
   }, [videos]);
 
   return (
