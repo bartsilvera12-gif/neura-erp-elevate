@@ -23,7 +23,7 @@ type Hit = {
  * Cierra con: botón X, tecla Escape, click fuera.
  * Compatible mobile (full-width) y desktop (panel flotante a la derecha).
  */
-export function SearchBox() {
+export function SearchBox({ variant = "icon" }: { variant?: "icon" | "bar" } = {}) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<Hit[] | null>(null);
@@ -98,17 +98,33 @@ export function SearchBox() {
   };
 
   return (
-    <div className="relative">
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        aria-label="Buscar"
-        aria-expanded={open}
-        className="p-2.5 text-primary hover:text-gold transition-smooth"
-      >
-        <Search size={20} />
-      </button>
+    <div className={variant === "bar" ? "relative w-full" : "relative"}>
+      {variant === "bar" ? (
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={() => setOpen((s) => !s)}
+          aria-label="Buscar perfumes y marcas"
+          aria-expanded={open}
+          className="flex items-center gap-2 w-full h-10 px-4 rounded-full border border-gold/30 bg-cream/50 text-left text-sm text-muted-foreground hover:border-gold/60 transition-smooth"
+        >
+          <Search size={16} className="text-gold shrink-0" />
+          <span className="font-editorial italic truncate">
+            Buscar perfumes, marcas…
+          </span>
+        </button>
+      ) : (
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={() => setOpen((s) => !s)}
+          aria-label="Buscar"
+          aria-expanded={open}
+          className="p-2.5 text-primary hover:text-gold transition-smooth"
+        >
+          <Search size={20} />
+        </button>
+      )}
 
       {open && (
         <>
@@ -122,7 +138,7 @@ export function SearchBox() {
             ref={panelRef}
             role="dialog"
             aria-label="Buscador de perfumes"
-            className="fixed lg:absolute top-20 sm:top-24 lg:top-[calc(100%+8px)] left-0 right-0 lg:left-auto lg:right-0 z-50 lg:w-[420px] bg-background border border-gold/30 shadow-elegant"
+            className="fixed lg:absolute top-[120px] sm:top-[152px] lg:top-[calc(100%+8px)] left-0 right-0 lg:left-auto lg:right-0 z-50 lg:w-[420px] bg-background border border-gold/30 shadow-elegant"
           >
             <div className="flex items-center gap-3 p-4 border-b border-border/60">
               <Search size={18} className="text-gold shrink-0" />

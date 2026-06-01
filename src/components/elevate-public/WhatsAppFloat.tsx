@@ -24,7 +24,9 @@ export function WhatsAppFloat() {
       aria-label="Consultas al WhatsApp"
       className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2"
     >
-      <span className="bg-primary text-cream text-xs tracking-widest uppercase px-4 py-2 whitespace-nowrap shadow-soft pointer-events-none">
+      {/* Label visible solo desde sm (tablet) para no competir con los botones
+          full-width del hero mobile. En desktop se ve normal. */}
+      <span className="hidden sm:inline-block bg-primary text-cream text-xs tracking-widest uppercase px-4 py-2 whitespace-nowrap shadow-soft pointer-events-none">
         Consultas al WhatsApp
       </span>
       <span className="relative h-14 w-14">

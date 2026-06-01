@@ -20,13 +20,15 @@ export function Logo({
   // se usa size="lg" en el footer), compensamos con un margen negativo.
   const imgClass = isLg
     ? "h-28 w-28 md:h-36 md:w-36 object-contain -ml-3 md:-ml-4"
-    : "h-14 w-14 sm:h-16 sm:w-16 md:h-24 md:w-24 object-contain shrink-0";
+    : "h-9 w-9 sm:h-16 sm:w-16 md:h-24 md:w-24 object-contain shrink-0";
   const titleClass = isLg
     ? "font-display text-3xl md:text-4xl tracking-[0.18em]"
-    : "font-display text-lg sm:text-xl md:text-2xl tracking-[0.1em] sm:tracking-[0.18em]";
+    : "font-display text-base sm:text-xl md:text-2xl tracking-[0.18em]";
+  // En mobile el tagline se oculta para liberar altura del header; vuelve
+  // desde sm (tablet) en adelante. En lg (desktop) nunca cambia.
   const tagClass = isLg
     ? "text-xs md:text-sm tracking-[0.3em] mt-1"
-    : "text-[9px] sm:text-[10px] tracking-[0.2em] sm:tracking-[0.3em] mt-0.5 sm:mt-1";
+    : "hidden sm:block text-[10px] tracking-[0.3em] mt-1";
   return (
     <Link href="/" className="flex items-center gap-2 sm:gap-3 group min-w-0" aria-label="Elevate inicio">
       <Image

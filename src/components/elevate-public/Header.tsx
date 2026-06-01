@@ -49,7 +49,7 @@ export function Header() {
         scrolled ? "shadow-soft" : ""
       }`}
     >
-      <div className="container mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 h-20 sm:h-24 lg:h-28">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 h-16 sm:h-24 lg:h-28">
         <Logo />
 
         <nav className="hidden lg:flex items-center gap-8" aria-label="Principal">
@@ -76,14 +76,10 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 shrink-0">
-          {/* En mobile el nav está colapsado en el menú hamburguesa, por eso
-              acá renderizamos una sola instancia de la lupa visible solo en
-              mobile. En desktop la lupa vive dentro del <nav> al lado de
-              "Inicio" (arriba). No hay duplicación visual: el switch es por
-              viewport. */}
-          <div className="lg:hidden">
-            <SearchBox />
-          </div>
+          {/* En mobile el buscador no vive acá: se renderiza como pill
+              full-width en una segunda fila bajo el header (ver más abajo).
+              En desktop la lupa-ícono sigue dentro del <nav> al lado de
+              "Inicio" (arriba). */}
 
           <Link
             href="/catalogo"
@@ -116,10 +112,18 @@ export function Header() {
           </button>
         </div>
       </div>
+
+      {/* Segunda fila mobile/tablet: barra de búsqueda tipo pill, estilo
+          e-commerce. Sólo visible <lg, no afecta desktop. */}
+      <div className="lg:hidden border-t border-gold/15 bg-background/95">
+        <div className="container mx-auto px-4 sm:px-6 py-2">
+          <SearchBox variant="bar" />
+        </div>
+      </div>
     </header>
 
       {open && (
-        <div className="lg:hidden fixed inset-x-0 top-20 sm:top-24 bottom-0 z-40 bg-background border-t border-gold/20 animate-fade-up overflow-y-auto">
+        <div className="lg:hidden fixed inset-x-0 top-[120px] sm:top-[152px] bottom-0 z-40 bg-background border-t border-gold/20 animate-fade-up overflow-y-auto">
           <nav className="flex flex-col p-6 gap-4" aria-label="Móvil">
             {NAV.map((n) => (
               <Link
