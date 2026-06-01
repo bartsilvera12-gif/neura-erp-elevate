@@ -5,15 +5,29 @@ import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import type { ResenaVideo } from "./Reviews";
 
 /**
- * Carrusel de videos de reseñas. Los videos NO usan autoPlay: arrancan
- * pausados y silenciados, y solo se reproducen cuando el usuario llega a la
- * sección (ver useEffect). El mute se fija imperativamente en el ref para
- * evitar el bug de React donde un <video muted> puede arrancar CON sonido por
- * una condición de carrera (facebook/react#10389). Se agrega:
- *  - Un botón de sonido por video para activar/desactivar el audio. Solo un
- *    video puede tener sonido a la vez (no se superponen audios).
- *  - Flechas en los extremos para desplazar el carrusel (clave en mobile,
- *    donde los videos se ven de a uno y se hace scroll horizontal con snap).
+ * Carrusel de videos de reseñas con AUDIO 100% MANUAL.
+ *
+ * Diseño:
+ *  - Cada video arranca muteado (HTML attr + propiedad JS) y entra en
+ *    autoplay-muted cuando la sección aparece en el viewport — eso lo
+ *    permite la política de autoplay del browser sin gesto del usuario.
+ *  - El sonido NO se activa solo. Sólo se enciende cuando el usuario
+ *    clickea o toca el video (o el botón de bocina). Esto cumple con la
+ *    política "user gesture required for audio playback" en Chrome,
+ *    Safari iOS y Firefox.
+ *  - Solo un video puede tener sonido a la vez. Al desmutear uno, todos
+ *    los demás se mutean.
+ *  - El audio se manipula imperativamente sobre el HTMLVideoElement
+ *    (no via prop de React) para evitar la condición de carrera de React
+ *    con `muted` (facebook/react#10389) y para mantener atributo HTML +
+ *    propiedad JS sincronizados, lo que algunos browsers exigen.
+ *  - Se usa `await play()` para detectar si el browser rechazó la
+ *    transición a audio (caso raro pero posible); en ese caso revertimos
+ *    al estado muteado en vez de quedar con UI inconsistente.
+ *
+ * El play/pause según visibilidad y el control de audio son flujos
+ * INDEPENDIENTES — el observer NUNCA toca `muted` ni `unmutedId`, sólo
+ * play() y pause(). Esto elimina la race condition con el toggle manual.
  */
 export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -28,118 +42,90 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     el.scrollBy({ left: dir * amount, behavior: "smooth" });
   };
 
-  const toggleSound = (id: string) => {
-    const next = unmutedId === id ? null : id;
+  /**
+   * Toggle de audio. Operación imperativa sobre el <video> real.
+   * Si está muteado → activa. Si está sonando → mutea.
+   * Protocolo completo: muted=false + removeAttribute('muted') + volume=1
+   * + await play(); con fallback a muteado si el browser rechaza.
+   */
+  const toggleSound = async (id: string) => {
+    const wasOn = unmutedId === id;
+
+    // 1) Mutear todos los demás (HTML attr + propiedad JS). Siempre se
+    //    hace, garantiza que nunca queden dos pistas sonando juntas.
     videoRefs.current.forEach((vid, vidId) => {
-      vid.muted = vidId !== next;
-      // El click cuenta como gesto de usuario: aprovechamos para asegurar
-      // que el video activo está reproduciendo (algunos browsers pausan al
-      // unmutear si el play original fue muteado-autoplay).
-      if (vidId === next) {
-        vid.play().catch(() => {});
+      if (vidId !== id) {
+        vid.muted = true;
+        vid.setAttribute("muted", "");
       }
     });
-    setUnmutedId(next);
+
+    const target = videoRefs.current.get(id);
+    if (!target) {
+      setUnmutedId(wasOn ? null : id);
+      return;
+    }
+
+    if (wasOn) {
+      // Re-mutear el target (toggle off)
+      target.muted = true;
+      target.setAttribute("muted", "");
+      setUnmutedId(null);
+      return;
+    }
+
+    // Activar audio en target
+    target.muted = false;
+    target.removeAttribute("muted");
+    target.volume = 1;
+    try {
+      // El click/tap que dispara este handler es el "user gesture" que
+      // habilita la reproducción con audio. await detecta si el browser
+      // igual la rechaza (autoplay policy no satisfecha en algún edge case).
+      await target.play();
+      setUnmutedId(id);
+    } catch {
+      // Fallback: volver a muteado para no quedar con UI mintiendo.
+      target.muted = true;
+      target.setAttribute("muted", "");
+      setUnmutedId(null);
+    }
   };
 
-  // Audio/reproducción de las reseñas, a prueba de "sonido al entrar":
-  //  - Los videos NO tienen autoPlay; arrancan pausados y muteados. Solo se
-  //    reproducen cuando el usuario LLEGA a la sección (visible ~40% en el
-  //    viewport). Mientras esté arriba en la página: pausado y en silencio.
-  //  - En mobile, dentro de la sección se reproduce el video centrado (resto
-  //    pausado) y lleva sonido automático tras el primer gesto del usuario (lo
-  //    exige el navegador). Al salir de la sección: pausa y silencio.
-  //  - El mute se fija imperativamente (vid.muted), no vía prop de React, para
-  //    evitar la condición de carrera del autoplay.
-  // En desktop se ven varios a la vez: se reproducen muteados al ver la sección
-  // (toggle manual de sonido); al salir de pantalla se silencian.
+  // Play/pause según visibilidad de la sección. NO toca audio.
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
-    const isMobile = window.matchMedia("(max-width: 639px)").matches;
+
     const cards = Array.from(
       root.querySelectorAll<HTMLElement>("[data-review-card]"),
     );
-
-    let activeId: string | null = null;
     let sectionVisible = false;
-    let unlocked = false;
 
-    const apply = () => {
+    const applyPlayback = () => {
       for (const c of cards) {
         const cid = c.dataset.reviewId;
         const vid = cid ? videoRefs.current.get(cid) : null;
         if (!vid) continue;
-        const shouldPlay =
-          sectionVisible && (isMobile ? cid === activeId : true);
-        if (shouldPlay) vid.play().catch(() => {});
-        else vid.pause();
-      }
-      const audibleId = unlocked && sectionVisible ? activeId : null;
-      videoRefs.current.forEach((vid, id) => {
-        vid.muted = id !== audibleId;
-      });
-      setUnmutedId(audibleId);
-    };
-
-    // El video "activo" (con sonido) es el más centrado horizontalmente en el
-    // carrusel — vale igual en mobile (un video por pantalla) que en desktop
-    // (varios visibles, suena el del medio). Recalculamos en cada scroll del
-    // carrusel y al cargar.
-    const computeActive = () => {
-      const rootRect = root.getBoundingClientRect();
-      const center = rootRect.left + rootRect.width / 2;
-      let best: string | null = null;
-      let bestDist = Infinity;
-      for (const c of cards) {
-        const id = c.dataset.reviewId;
-        if (!id) continue;
-        const r = c.getBoundingClientRect();
-        const cc = r.left + r.width / 2;
-        const d = Math.abs(cc - center);
-        if (d < bestDist) {
-          bestDist = d;
-          best = id;
+        if (sectionVisible) {
+          // autoplay-muted siempre permitido por política del browser.
+          vid.play().catch(() => {});
+        } else {
+          vid.pause();
         }
       }
-      if (best !== activeId) {
-        activeId = best;
-        apply();
-      }
     };
-    computeActive();
-    root.addEventListener("scroll", computeActive, { passive: true });
 
-    // Vertical (viewport): ¿el usuario llegó a la sección de videos?
-    // Umbral chico (0.1) para que se considere "visible" apenas asoma; el
-    // anterior 0.4 fallaba en pantallas donde el scroller mide más alto
-    // que el viewport (mobile vertical y desktops chicos).
     const sectionObs = new IntersectionObserver(
       ([entry]) => {
         sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.1;
-        apply();
+        applyPlayback();
       },
-      { threshold: [0, 0.1, 0.4] },
+      { threshold: [0, 0.1] },
     );
     sectionObs.observe(root);
 
-    // Primer gesto del usuario → desbloquea el audio (requisito del navegador).
-    // No suena nada por sí solo: el audio solo arranca con la sección en pantalla.
-    const ac = new AbortController();
-    const unlock = () => {
-      unlocked = true;
-      apply();
-      ac.abort();
-    };
-    for (const ev of ["pointerdown", "touchend", "keydown"] as const) {
-      window.addEventListener(ev, unlock, { signal: ac.signal });
-    }
-
-    return () => {
-      root.removeEventListener("scroll", computeActive);
-      sectionObs.disconnect();
-      ac.abort();
-    };
+    return () => sectionObs.disconnect();
   }, [videos]);
 
   return (
@@ -178,7 +164,11 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
                 <video
                   ref={(el) => {
                     if (el) {
+                      // Estado inicial garantizado: muteado en JS y en HTML
+                      // para que el autoplay sea legal y para evitar la
+                      // race condition de React con `muted` (#10389).
                       el.muted = true;
+                      el.setAttribute("muted", "");
                       videoRefs.current.set(v.id, el);
                     } else {
                       videoRefs.current.delete(v.id);
@@ -188,15 +178,16 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
                   poster={v.poster_url ?? undefined}
                   loop
                   playsInline
+                  muted
                   preload="auto"
                   onClick={() => toggleSound(v.id)}
                   className="h-full w-full object-cover cursor-pointer"
                 />
-                {/* Hint visible cuando el video está muteado: indica claramente
-                    que se puede tocar para activar el sonido. Patrón TikTok/IG. */}
+                {/* Hint visible mientras está muteado: deja claro que el
+                    video es interactivo (patrón TikTok/IG). pointer-events-none
+                    para que el click pase al <video>. */}
                 {muted && (
                   <div
-                    onClick={() => toggleSound(v.id)}
                     className="absolute inset-0 z-[5] flex items-center justify-center pointer-events-none"
                     aria-hidden="true"
                   >
