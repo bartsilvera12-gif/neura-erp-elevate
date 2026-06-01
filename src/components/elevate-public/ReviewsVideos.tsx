@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import type { ResenaVideo } from "./Reviews";
 
@@ -27,6 +27,30 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   const toggleSound = (id: string) => {
     setUnmutedId((cur) => (cur === id ? null : id));
   };
+
+  // En mobile los videos se ven de a uno con scroll-snap. Cuando el usuario
+  // desplaza y el video con sonido sale de vista, lo silenciamos solo para que
+  // no se escuche un audio "fuera de pantalla". Observamos visibilidad dentro
+  // del propio scroller; al caer por debajo del umbral, si era el desmuteado,
+  // lo muteamos.
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    const cards = root.querySelectorAll<HTMLElement>("[data-review-card]");
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.intersectionRatio < 0.6) {
+            const id = (e.target as HTMLElement).dataset.reviewId;
+            setUnmutedId((cur) => (cur && cur === id ? null : cur));
+          }
+        }
+      },
+      { root, threshold: [0.6] },
+    );
+    cards.forEach((c) => obs.observe(c));
+    return () => obs.disconnect();
+  }, [videos]);
 
   return (
     <div className="relative mt-14">
@@ -57,6 +81,7 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
             <figure
               key={v.id}
               data-review-card
+              data-review-id={v.id}
               className="snap-center shrink-0 w-[78vw] sm:w-[280px] lg:w-[300px] bg-black border border-border/60 shadow-soft overflow-hidden"
             >
               <div className="relative aspect-[9/16] bg-black">
