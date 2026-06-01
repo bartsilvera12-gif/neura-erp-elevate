@@ -69,35 +69,40 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
         if (shouldPlay) vid.play().catch(() => {});
         else vid.pause();
       }
-      if (isMobile) {
-        const audibleId = unlocked && sectionVisible ? activeId : null;
-        videoRefs.current.forEach((vid, id) => {
-          vid.muted = id !== audibleId;
-        });
-        setUnmutedId(audibleId);
-      } else if (!sectionVisible) {
-        // Desktop: nunca dejar un video sonando fuera de pantalla.
-        videoRefs.current.forEach((vid) => {
-          vid.muted = true;
-        });
-        setUnmutedId(null);
-      }
+      const audibleId = unlocked && sectionVisible ? activeId : null;
+      videoRefs.current.forEach((vid, id) => {
+        vid.muted = id !== audibleId;
+      });
+      setUnmutedId(audibleId);
     };
 
-    // Horizontal: qué video está centrado en el carrusel.
-    const cardObs = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          const id = (e.target as HTMLElement).dataset.reviewId;
-          if (!id) continue;
-          if (e.intersectionRatio >= 0.6) activeId = id;
-          else if (activeId === id) activeId = null;
+    // El video "activo" (con sonido) es el más centrado horizontalmente en el
+    // carrusel — vale igual en mobile (un video por pantalla) que en desktop
+    // (varios visibles, suena el del medio). Recalculamos en cada scroll del
+    // carrusel y al cargar.
+    const computeActive = () => {
+      const rootRect = root.getBoundingClientRect();
+      const center = rootRect.left + rootRect.width / 2;
+      let best: string | null = null;
+      let bestDist = Infinity;
+      for (const c of cards) {
+        const id = c.dataset.reviewId;
+        if (!id) continue;
+        const r = c.getBoundingClientRect();
+        const cc = r.left + r.width / 2;
+        const d = Math.abs(cc - center);
+        if (d < bestDist) {
+          bestDist = d;
+          best = id;
         }
+      }
+      if (best !== activeId) {
+        activeId = best;
         apply();
-      },
-      { root, threshold: [0.6] },
-    );
-    cards.forEach((c) => cardObs.observe(c));
+      }
+    };
+    computeActive();
+    root.addEventListener("scroll", computeActive, { passive: true });
 
     // Vertical (viewport): ¿el usuario llegó a la sección de videos?
     const sectionObs = new IntersectionObserver(
@@ -122,7 +127,7 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     }
 
     return () => {
-      cardObs.disconnect();
+      root.removeEventListener("scroll", computeActive);
       sectionObs.disconnect();
       ac.abort();
     };
