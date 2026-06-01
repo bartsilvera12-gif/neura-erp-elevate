@@ -122,7 +122,7 @@ export function SearchBox() {
             ref={panelRef}
             role="dialog"
             aria-label="Buscador de perfumes"
-            className="fixed lg:absolute top-[88px] lg:top-[calc(100%+8px)] left-0 right-0 lg:left-auto lg:right-0 z-50 lg:w-[420px] bg-background border border-gold/30 shadow-elegant"
+            className="fixed lg:absolute top-20 sm:top-24 lg:top-[calc(100%+8px)] left-0 right-0 lg:left-auto lg:right-0 z-50 lg:w-[420px] bg-background border border-gold/30 shadow-elegant"
           >
             <div className="flex items-center gap-3 p-4 border-b border-border/60">
               <Search size={18} className="text-gold shrink-0" />

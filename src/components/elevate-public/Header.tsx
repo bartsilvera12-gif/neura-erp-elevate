@@ -43,12 +43,13 @@ export function Header() {
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname?.startsWith(href));
 
   return (
+    <>
     <header
       className={`fixed top-0 inset-x-0 z-50 transition-elegant bg-background/95 backdrop-blur-md ${
         scrolled ? "shadow-soft" : ""
       }`}
     >
-      <div className="container mx-auto px-6 lg:px-10 flex items-center justify-between h-28">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-10 flex items-center justify-between gap-2 h-20 sm:h-24 lg:h-28">
         <Logo />
 
         <nav className="hidden lg:flex items-center gap-8" aria-label="Principal">
@@ -74,7 +75,7 @@ export function Header() {
           })}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 sm:gap-2 lg:gap-3 shrink-0">
           {/* En mobile el nav está colapsado en el menú hamburguesa, por eso
               acá renderizamos una sola instancia de la lupa visible solo en
               mobile. En desktop la lupa vive dentro del <nav> al lado de
@@ -115,22 +116,33 @@ export function Header() {
           </button>
         </div>
       </div>
+    </header>
 
       {open && (
-        <div className="lg:hidden bg-background border-t border-gold/20 animate-fade-up">
+        <div className="lg:hidden fixed inset-x-0 top-20 sm:top-24 bottom-0 z-40 bg-background border-t border-gold/20 animate-fade-up overflow-y-auto">
           <nav className="flex flex-col p-6 gap-4" aria-label="Móvil">
             {NAV.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className="text-base text-foreground/85 hover:text-primary py-2 border-b border-border/50"
+                className={`text-base py-3 border-b border-border/50 transition-smooth ${
+                  isActive(n.href)
+                    ? "text-primary"
+                    : "text-foreground/85 hover:text-primary"
+                }`}
               >
                 {n.label}
               </Link>
             ))}
+            <Link
+              href="/catalogo"
+              className="mt-2 text-center px-6 py-3 bg-primary text-primary-foreground text-xs tracking-[0.25em] uppercase hover:bg-primary-glow transition-elegant shadow-soft border border-gold/30"
+            >
+              Explorar catálogo
+            </Link>
           </nav>
         </div>
       )}
-    </header>
+    </>
   );
 }

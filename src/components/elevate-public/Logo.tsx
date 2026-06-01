@@ -20,15 +20,15 @@ export function Logo({
   // se usa size="lg" en el footer), compensamos con un margen negativo.
   const imgClass = isLg
     ? "h-28 w-28 md:h-36 md:w-36 object-contain -ml-3 md:-ml-4"
-    : "h-20 w-20 md:h-24 md:w-24 object-contain";
+    : "h-14 w-14 sm:h-16 sm:w-16 md:h-24 md:w-24 object-contain shrink-0";
   const titleClass = isLg
     ? "font-display text-3xl md:text-4xl tracking-[0.18em]"
-    : "font-display text-2xl tracking-[0.18em]";
+    : "font-display text-lg sm:text-xl md:text-2xl tracking-[0.1em] sm:tracking-[0.18em]";
   const tagClass = isLg
     ? "text-xs md:text-sm tracking-[0.3em] mt-1"
-    : "text-[10px] tracking-[0.3em] mt-1";
+    : "text-[9px] sm:text-[10px] tracking-[0.2em] sm:tracking-[0.3em] mt-0.5 sm:mt-1";
   return (
-    <Link href="/" className="flex items-center gap-3 group" aria-label="Elevate inicio">
+    <Link href="/" className="flex items-center gap-2 sm:gap-3 group min-w-0" aria-label="Elevate inicio">
       <Image
         src="/brand/elevate/elevate-logo-gold.png"
         alt="Elevate logo"
