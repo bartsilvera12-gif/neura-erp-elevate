@@ -30,11 +30,15 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   };
 
   // En mobile los videos se ven de a uno (scroll-snap), estilo reels:
-  //  - El video centrado se reproduce; el resto queda pausado.
-  //  - El centrado lleva sonido. Las políticas del navegador impiden audio sin
-  //    una interacción previa del usuario, así que el PRIMER gesto (tap o swipe)
-  //    "desbloquea" el sonido del video centrado; a partir de ahí es automático
-  //    al cambiar de video.
+  //  - Solo se reproduce/suena cuando el usuario LLEGA a la sección (la sección
+  //    está visible en pantalla). Mientras esté arriba en la página, todo queda
+  //    pausado y en silencio: el audio nunca arranca "al inicio".
+  //  - Dentro de la sección, el video centrado se reproduce; el resto pausado.
+  //  - El centrado lleva sonido automático. Las políticas del navegador impiden
+  //    audio sin una interacción previa, así que el PRIMER gesto (tap o swipe)
+  //    lo "desbloquea"; igualmente solo suena al estar la sección en pantalla.
+  // Dos observadores: uno horizontal (qué video está centrado) y otro vertical
+  // (si la sección está visible en el viewport).
   // En desktop se ven varios a la vez: no auto-reproducimos con sonido ni
   // pausamos; solo silenciamos un video al salir de vista (toggle manual).
   useEffect(() => {
@@ -62,22 +66,26 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     }
 
     let activeId: string | null = null;
+    let sectionVisible = false;
     let unlocked = false;
 
-    // Reproduce el video activo (pausando el resto) y, si el sonido ya está
-    // desbloqueado, lo desmutea.
+    // Reproduce el video centrado (pausa el resto) SOLO si la sección está en
+    // pantalla. El sonido se activa solo cuando: ya hubo un gesto del usuario
+    // (unlocked) Y la sección está visible. Fuera de la sección: todo pausado y
+    // en silencio.
     const apply = () => {
       for (const c of cards) {
         const cid = c.dataset.reviewId;
         const vid = cid ? videoRefs.current.get(cid) : null;
         if (!vid) continue;
-        if (cid === activeId) vid.play().catch(() => {});
+        if (cid === activeId && sectionVisible) vid.play().catch(() => {});
         else vid.pause();
       }
-      setUnmutedId(unlocked ? activeId : null);
+      setUnmutedId(unlocked && sectionVisible ? activeId : null);
     };
 
-    const obs = new IntersectionObserver(
+    // Observador horizontal: qué video está centrado en el carrusel.
+    const cardObs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
           const id = (e.target as HTMLElement).dataset.reviewId;
@@ -89,10 +97,23 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
       },
       { root, threshold: [0.6] },
     );
-    cards.forEach((c) => obs.observe(c));
+    cards.forEach((c) => cardObs.observe(c));
 
-    // Primer gesto del usuario en cualquier parte → desbloquea el audio del
-    // video centrado. Un solo listener: se autodestruye al dispararse.
+    // Observador vertical (viewport): ¿el usuario llegó a la sección de videos?
+    // Recién al estar visible (~40%) se reproduce/activa el sonido; al salir de
+    // pantalla (scrollear más allá) se pausa y silencia todo.
+    const sectionObs = new IntersectionObserver(
+      ([entry]) => {
+        sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.4;
+        apply();
+      },
+      { threshold: [0, 0.4] },
+    );
+    sectionObs.observe(root);
+
+    // Primer gesto del usuario en cualquier parte → desbloquea el audio (lo
+    // exige el navegador). No hace sonar nada por sí solo: el audio solo arranca
+    // cuando además la sección está en pantalla.
     const ac = new AbortController();
     const unlock = () => {
       unlocked = true;
@@ -104,7 +125,8 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     }
 
     return () => {
-      obs.disconnect();
+      cardObs.disconnect();
+      sectionObs.disconnect();
       ac.abort();
     };
   }, [videos]);
