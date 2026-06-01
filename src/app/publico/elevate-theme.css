@@ -112,22 +112,49 @@
   box-shadow: 0 8px 30px -12px hsl(39 59% 37% / 0.4);
 }
 
-/* Animación de Bestsellers — fade suave (rediseñado).
- * Antes usaba rotateX(-12deg) + scale + blur, lo que se sentía brusco al
- * cambiar de productos. Ahora es un fade in con un translate sutil:
- * suave, elegante y sin distorsión. Respeta prefers-reduced-motion abajo. */
-@keyframes elevate-bestseller-rotate-in {
-  0% {
-    opacity: 0;
-    transform: translateY(12px);
+/* Carrusel continuo de Bestsellers — desplazamiento horizontal infinito.
+ * El track (.bestseller-marquee__track) renderiza la lista de productos
+ * DUPLICADA; la animación traslada -50% (una copia completa) en loop lineal,
+ * por lo que el empalme es invisible y el movimiento es constante y fluido
+ * (no "slide por slide"). Lento y premium. Pausa al hacer hover/focus y
+ * degradado sutil en los bordes para sensación de continuidad. Respeta
+ * prefers-reduced-motion abajo. */
+.elevate-public-theme .bestseller-marquee {
+  position: relative;
+  overflow: hidden;
+}
+@keyframes elevate-bestseller-marquee {
+  from {
+    transform: translateX(0);
   }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
+  to {
+    transform: translateX(-50%);
   }
 }
-.elevate-public-theme .bestseller-rotate {
-  animation: elevate-bestseller-rotate-in 700ms ease-in-out both;
+.elevate-public-theme .bestseller-marquee__track {
+  animation: elevate-bestseller-marquee 45s linear infinite;
+  will-change: transform;
+}
+.elevate-public-theme .bestseller-marquee:hover .bestseller-marquee__track,
+.elevate-public-theme .bestseller-marquee:focus-within .bestseller-marquee__track {
+  animation-play-state: paused;
+}
+.elevate-public-theme .bestseller-marquee__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8vw;
+  max-width: 120px;
+  z-index: 2;
+  pointer-events: none;
+}
+.elevate-public-theme .bestseller-marquee__edge--left {
+  left: 0;
+  background: linear-gradient(to right, var(--background), transparent);
+}
+.elevate-public-theme .bestseller-marquee__edge--right {
+  right: 0;
+  background: linear-gradient(to left, var(--background), transparent);
 }
 
 /* Tarjetas promo: float + glow + sheen */
@@ -194,8 +221,12 @@
 @media (prefers-reduced-motion: reduce) {
   .elevate-public-theme .promo-card,
   .elevate-public-theme .promo-card::before,
-  .elevate-public-theme .bestseller-rotate,
+  .elevate-public-theme .bestseller-marquee__track,
   .elevate-public-theme .animate-fade-up {
     animation: none !important;
+  }
+  /* Sin animación, el carrusel queda estático: permitir desplazarlo a mano. */
+  .elevate-public-theme .bestseller-marquee {
+    overflow-x: auto;
   }
 }

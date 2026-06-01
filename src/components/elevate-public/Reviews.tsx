@@ -35,7 +35,7 @@ export function Reviews({ videos = [] }: { videos?: ResenaVideo[] }) {
       <div className="mx-auto px-3 sm:px-4 lg:px-8">
         <SectionTitle
           eyebrow="Reseñas"
-          title="Clientes que ya elevaron su esencia"
+          title="Experiencia Elevate"
           subtitle="Voces de quienes ya confían en nuestra curaduría."
         />
         {tieneVideos ? (
@@ -50,11 +50,12 @@ export function Reviews({ videos = [] }: { videos?: ResenaVideo[] }) {
                   <video
                     src={v.video_url}
                     poster={v.poster_url ?? undefined}
-                    controls
-                    preload="metadata"
-                    playsInline
+                    autoPlay
+                    loop
                     muted
-                    className="h-full w-full object-cover"
+                    playsInline
+                    preload="auto"
+                    className="h-full w-full object-cover pointer-events-none"
                   />
                 </div>
               </figure>
