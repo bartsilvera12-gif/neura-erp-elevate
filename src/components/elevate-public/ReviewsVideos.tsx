@@ -5,8 +5,11 @@ import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import type { ResenaVideo } from "./Reviews";
 
 /**
- * Carrusel de videos de reseñas. Cada video se reproduce solo, en loop y
- * silenciado (requisito del navegador para autoplay). Se agrega:
+ * Carrusel de videos de reseñas. Los videos NO usan autoPlay: arrancan
+ * pausados y silenciados, y solo se reproducen cuando el usuario llega a la
+ * sección (ver useEffect). El mute se fija imperativamente en el ref para
+ * evitar el bug de React donde un <video muted> puede arrancar CON sonido por
+ * una condición de carrera (facebook/react#10389). Se agrega:
  *  - Un botón de sonido por video para activar/desactivar el audio. Solo un
  *    video puede tener sonido a la vez (no se superponen audios).
  *  - Flechas en los extremos para desplazar el carrusel (clave en mobile,
@@ -26,21 +29,24 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   };
 
   const toggleSound = (id: string) => {
-    setUnmutedId((cur) => (cur === id ? null : id));
+    const next = unmutedId === id ? null : id;
+    videoRefs.current.forEach((vid, vidId) => {
+      vid.muted = vidId !== next;
+    });
+    setUnmutedId(next);
   };
 
-  // En mobile los videos se ven de a uno (scroll-snap), estilo reels:
-  //  - Solo se reproduce/suena cuando el usuario LLEGA a la sección (la sección
-  //    está visible en pantalla). Mientras esté arriba en la página, todo queda
-  //    pausado y en silencio: el audio nunca arranca "al inicio".
-  //  - Dentro de la sección, el video centrado se reproduce; el resto pausado.
-  //  - El centrado lleva sonido automático. Las políticas del navegador impiden
-  //    audio sin una interacción previa, así que el PRIMER gesto (tap o swipe)
-  //    lo "desbloquea"; igualmente solo suena al estar la sección en pantalla.
-  // Dos observadores: uno horizontal (qué video está centrado) y otro vertical
-  // (si la sección está visible en el viewport).
-  // En desktop se ven varios a la vez: no auto-reproducimos con sonido ni
-  // pausamos; solo silenciamos un video al salir de vista (toggle manual).
+  // Audio/reproducción de las reseñas, a prueba de "sonido al entrar":
+  //  - Los videos NO tienen autoPlay; arrancan pausados y muteados. Solo se
+  //    reproducen cuando el usuario LLEGA a la sección (visible ~40% en el
+  //    viewport). Mientras esté arriba en la página: pausado y en silencio.
+  //  - En mobile, dentro de la sección se reproduce el video centrado (resto
+  //    pausado) y lleva sonido automático tras el primer gesto del usuario (lo
+  //    exige el navegador). Al salir de la sección: pausa y silencio.
+  //  - El mute se fija imperativamente (vid.muted), no vía prop de React, para
+  //    evitar la condición de carrera del autoplay.
+  // En desktop se ven varios a la vez: se reproducen muteados al ver la sección
+  // (toggle manual de sonido); al salir de pantalla se silencian.
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
@@ -49,42 +55,36 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
       root.querySelectorAll<HTMLElement>("[data-review-card]"),
     );
 
-    if (!isMobile) {
-      const obs = new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            if (e.intersectionRatio < 0.6) {
-              const id = (e.target as HTMLElement).dataset.reviewId;
-              setUnmutedId((cur) => (cur === id ? null : cur));
-            }
-          }
-        },
-        { root, threshold: [0.6] },
-      );
-      cards.forEach((c) => obs.observe(c));
-      return () => obs.disconnect();
-    }
-
     let activeId: string | null = null;
     let sectionVisible = false;
     let unlocked = false;
 
-    // Reproduce el video centrado (pausa el resto) SOLO si la sección está en
-    // pantalla. El sonido se activa solo cuando: ya hubo un gesto del usuario
-    // (unlocked) Y la sección está visible. Fuera de la sección: todo pausado y
-    // en silencio.
     const apply = () => {
       for (const c of cards) {
         const cid = c.dataset.reviewId;
         const vid = cid ? videoRefs.current.get(cid) : null;
         if (!vid) continue;
-        if (cid === activeId && sectionVisible) vid.play().catch(() => {});
+        const shouldPlay =
+          sectionVisible && (isMobile ? cid === activeId : true);
+        if (shouldPlay) vid.play().catch(() => {});
         else vid.pause();
       }
-      setUnmutedId(unlocked && sectionVisible ? activeId : null);
+      if (isMobile) {
+        const audibleId = unlocked && sectionVisible ? activeId : null;
+        videoRefs.current.forEach((vid, id) => {
+          vid.muted = id !== audibleId;
+        });
+        setUnmutedId(audibleId);
+      } else if (!sectionVisible) {
+        // Desktop: nunca dejar un video sonando fuera de pantalla.
+        videoRefs.current.forEach((vid) => {
+          vid.muted = true;
+        });
+        setUnmutedId(null);
+      }
     };
 
-    // Observador horizontal: qué video está centrado en el carrusel.
+    // Horizontal: qué video está centrado en el carrusel.
     const cardObs = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -99,9 +99,7 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     );
     cards.forEach((c) => cardObs.observe(c));
 
-    // Observador vertical (viewport): ¿el usuario llegó a la sección de videos?
-    // Recién al estar visible (~40%) se reproduce/activa el sonido; al salir de
-    // pantalla (scrollear más allá) se pausa y silencia todo.
+    // Vertical (viewport): ¿el usuario llegó a la sección de videos?
     const sectionObs = new IntersectionObserver(
       ([entry]) => {
         sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.4;
@@ -111,9 +109,8 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     );
     sectionObs.observe(root);
 
-    // Primer gesto del usuario en cualquier parte → desbloquea el audio (lo
-    // exige el navegador). No hace sonar nada por sí solo: el audio solo arranca
-    // cuando además la sección está en pantalla.
+    // Primer gesto del usuario → desbloquea el audio (requisito del navegador).
+    // No suena nada por sí solo: el audio solo arranca con la sección en pantalla.
     const ac = new AbortController();
     const unlock = () => {
       unlocked = true;
@@ -166,14 +163,16 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
               <div className="relative aspect-[9/16] bg-black">
                 <video
                   ref={(el) => {
-                    if (el) videoRefs.current.set(v.id, el);
-                    else videoRefs.current.delete(v.id);
+                    if (el) {
+                      el.muted = true;
+                      videoRefs.current.set(v.id, el);
+                    } else {
+                      videoRefs.current.delete(v.id);
+                    }
                   }}
                   src={v.video_url}
                   poster={v.poster_url ?? undefined}
-                  autoPlay
                   loop
-                  muted={muted}
                   playsInline
                   preload="auto"
                   className="h-full w-full object-cover"
