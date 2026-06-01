@@ -7,15 +7,18 @@ import type { ResenaVideo } from "./Reviews";
 /**
  * Carrusel de videos de reseñas.
  *
- * Política de audio:
- *  - MOBILE/TABLET (<lg = <1024px): el video centrado se DESMUTEA solo
- *    cuando (a) la sección está visible y (b) el usuario ya hizo cualquier
- *    gesto en la página (requisito de autoplay con sonido del browser).
- *    Al cambiar de video centrado (scroll del carrusel), el audio salta al
- *    nuevo. Si el usuario toca el botón de bocina queda fijo manualmente
- *    (override) hasta que vuelva a tocarlo.
- *  - DESKTOP (≥lg): no hay auto-unmute. El usuario activa el sonido
- *    explícitamente con el botón de bocina.
+ * Política de audio (mobile y desktop):
+ *  - El video centrado en el carrusel se DESMUTEA automáticamente cuando
+ *    (a) la sección está visible en el viewport y (b) el usuario ya hizo
+ *    cualquier gesto en la página (requisito de autoplay con sonido del
+ *    browser). Al cambiar de video centrado (scroll del carrusel), el
+ *    audio salta al nuevo y el anterior se mutea — nunca dos pistas a la
+ *    vez.
+ *  - Si el browser bloquea el play() con sonido (típicamente iOS Safari
+ *    cuando el gesto fue hace mucho), revertimos a muteado sin overlay
+ *    ni UI extra; el botón de bocina queda disponible para reintentar.
+ *  - El botón de bocina es un override manual: tocarlo fija la decisión
+ *    del usuario (muteado o desmuteado) y el flujo auto deja de pisarlo.
  *  - El audio se manipula imperativamente sobre el HTMLVideoElement
  *    (muted + atributo HTML + volume + play) para evitar la race condition
  *    de React con `muted` (facebook/react#10389) y para que el toggle quede
@@ -120,8 +123,11 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     const root = scrollerRef.current;
     if (!root) return;
     const s = stateRef.current;
-    // <lg = mobile y tablet usan auto-unmute. Desktop puro queda manual.
-    s.autoEnabled = window.matchMedia("(max-width: 1023.9px)").matches;
+    // Auto-unmute habilitado en todos los viewports: el video centrado
+    // suena solo cuando la sección está visible y el usuario ya hizo
+    // cualquier gesto en la página (requisito de autoplay policy del
+    // browser). El botón de bocina sigue disponible como override manual.
+    s.autoEnabled = true;
 
     const cards = Array.from(
       root.querySelectorAll<HTMLElement>("[data-review-card]"),
@@ -140,7 +146,7 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
       }
     };
 
-    // Cuál card está más centrada → ese es el "auto target" en mobile.
+    // Cuál card está más centrada → ese es el "auto target" del audio.
     const computeCentered = () => {
       const rect = root.getBoundingClientRect();
       const center = rect.left + rect.width / 2;
