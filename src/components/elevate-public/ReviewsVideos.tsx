@@ -32,6 +32,12 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     const next = unmutedId === id ? null : id;
     videoRefs.current.forEach((vid, vidId) => {
       vid.muted = vidId !== next;
+      // El click cuenta como gesto de usuario: aprovechamos para asegurar
+      // que el video activo está reproduciendo (algunos browsers pausan al
+      // unmutear si el play original fue muteado-autoplay).
+      if (vidId === next) {
+        vid.play().catch(() => {});
+      }
     });
     setUnmutedId(next);
   };
@@ -105,12 +111,15 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     root.addEventListener("scroll", computeActive, { passive: true });
 
     // Vertical (viewport): ¿el usuario llegó a la sección de videos?
+    // Umbral chico (0.1) para que se considere "visible" apenas asoma; el
+    // anterior 0.4 fallaba en pantallas donde el scroller mide más alto
+    // que el viewport (mobile vertical y desktops chicos).
     const sectionObs = new IntersectionObserver(
       ([entry]) => {
-        sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.4;
+        sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.1;
         apply();
       },
-      { threshold: [0, 0.4] },
+      { threshold: [0, 0.1, 0.4] },
     );
     sectionObs.observe(root);
 
@@ -180,12 +189,29 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
                   loop
                   playsInline
                   preload="auto"
-                  className="h-full w-full object-cover"
+                  onClick={() => toggleSound(v.id)}
+                  className="h-full w-full object-cover cursor-pointer"
                 />
+                {/* Hint visible cuando el video está muteado: indica claramente
+                    que se puede tocar para activar el sonido. Patrón TikTok/IG. */}
+                {muted && (
+                  <div
+                    onClick={() => toggleSound(v.id)}
+                    className="absolute inset-0 z-[5] flex items-center justify-center pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    <span className="bg-black/45 text-white text-[11px] tracking-[0.25em] uppercase px-3 py-1.5 backdrop-blur-sm">
+                      Tocá para sonido
+                    </span>
+                  </div>
+                )}
                 <button
                   type="button"
                   aria-label={muted ? "Activar sonido" : "Silenciar"}
-                  onClick={() => toggleSound(v.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSound(v.id);
+                  }}
                   className="absolute bottom-3 right-3 z-10 h-10 w-10 rounded-full bg-black/55 text-white backdrop-blur flex items-center justify-center hover:bg-black/75 transition-elegant"
                 >
                   {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
