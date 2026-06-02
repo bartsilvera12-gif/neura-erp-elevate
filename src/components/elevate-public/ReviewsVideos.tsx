@@ -5,12 +5,15 @@ import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import type { ResenaVideo } from "./Reviews";
 
 /**
- * Carrusel de videos de reseñas, comportamiento estilo reels.
+ * Carrusel de videos de reseñas.
  *
  * Audio:
- *  - El video más centrado en el carrusel se desmutea solo cuando
- *    (a) la sección está visible y (b) el browser tiene el audio
- *    desbloqueado (autoplay policy: requiere un gesto previo del usuario).
+ *  - Auto-unmute SOLO en mobile (`matchMedia("(max-width: 767px)")`). En
+ *    tablet y desktop el comportamiento queda igual que antes: muteado
+ *    por defecto, activación manual mediante el botón de bocina.
+ *  - En mobile el video más centrado se desmutea cuando (a) la sección
+ *    está visible y (b) el browser tiene el audio desbloqueado (autoplay
+ *    policy: requiere un gesto previo del usuario).
  *  - `syncActiveVideoNow()` recomputa cuál es el activo y aplica el audio
  *    imperativamente. Se llama desde MUCHOS triggers — montaje, RAF,
  *    timeouts cortos, IntersectionObserver, scroll del carrusel, canplay
@@ -20,8 +23,9 @@ import type { ResenaVideo } from "./Reviews";
  *    instantáneamente. Nunca dos pistas a la vez.
  *  - Si play() es rechazado por política, se revierte a muteado en
  *    silencio (sin overlays/carteles) y el próximo gesto lo reintenta.
- *  - El botón de bocina sigue funcionando como override manual: si lo
- *    tocás queda fijo en lo que decidiste hasta que lo vuelvas a tocar.
+ *  - El botón de bocina funciona como override manual en TODOS los
+ *    viewports (incluido desktop): tocarlo fija la decisión hasta que se
+ *    vuelva a tocar.
  *  - El audio se manipula imperativamente sobre el HTMLVideoElement
  *    (muted + atributo HTML + volume + play) para sortear la race
  *    condition de React con `muted` (facebook/react#10389) y mantener
@@ -40,6 +44,10 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     centeredId: null as string | null,
     manualPick: null as string | null,
     manualActive: false,
+    // Auto-unmute por visibilidad SOLO en mobile (max-width: 767px).
+    // En tablet/desktop el audio se activa únicamente con el botón de
+    // bocina (override manual). Se computa en el useEffect, mount-time.
+    autoOnVisible: false,
   });
 
   const scrollByCards = (dir: 1 | -1) => {
@@ -92,7 +100,10 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     let target: string | null = null;
     if (s.manualActive) {
       target = s.manualPick;
-    } else if (s.audioUnlocked && s.sectionVisible) {
+    } else if (s.autoOnVisible && s.audioUnlocked && s.sectionVisible) {
+      // Auto solo en mobile (≤767px). En tablet/desktop el flag
+      // autoOnVisible queda en false y este branch no aplica — el audio
+      // permanece muteado salvo override manual con el botón de bocina.
       target = s.centeredId;
     }
 
@@ -153,6 +164,26 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     const root = scrollerRef.current;
     if (!root) return;
     const s = stateRef.current;
+
+    // Mobile real: solo phones (≤767px). Tablet y desktop quedan con
+    // comportamiento manual (botón de bocina) — sin cambios respecto a la
+    // versión previa pre-auto-unmute en esos viewports.
+    const mqMobile = window.matchMedia("(max-width: 767px)");
+    s.autoOnVisible = mqMobile.matches;
+    const onMqChange = (e: MediaQueryListEvent) => {
+      s.autoOnVisible = e.matches;
+      // Si se sale de mobile en caliente, mutear todos por consistencia.
+      if (!e.matches) {
+        videoRefs.current.forEach((vid) => {
+          vid.muted = true;
+          vid.setAttribute("muted", "");
+        });
+        setUnmutedId(null);
+      } else {
+        syncActiveVideoNow();
+      }
+    };
+    mqMobile.addEventListener("change", onMqChange);
 
     const applyPlayback = () => {
       videoRefs.current.forEach((vid) => {
@@ -261,6 +292,7 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
       });
       sectionObs.disconnect();
       root.removeEventListener("scroll", onCarouselScroll);
+      mqMobile.removeEventListener("change", onMqChange);
       ac.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

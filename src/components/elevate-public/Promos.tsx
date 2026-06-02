@@ -21,7 +21,11 @@ export function Promos({ products }: { products: Product[] }) {
           title="Selecciones por tiempo limitado"
           subtitle="Una oportunidad de incorporar piezas codiciadas a un precio excepcional."
         />
-        <div className="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+        {/* Mobile: 2 columnas → imágenes más chicas. Ajustes scoped a estas
+            cards (no afectan ProductCard del catálogo): menos padding interno
+            y precios que envuelven si no entran en el ancho angosto. Desde sm
+            vuelve al diseño original. */}
+        <div className="mt-14 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-7 [&_article>div:last-child]:p-3 sm:[&_article>div:last-child]:p-6 [&_.items-baseline]:flex-wrap sm:[&_.items-baseline]:flex-nowrap">
           {products.map((p) => (
             <div key={p.id} className="promo-card">
               <ProductCard product={p} />

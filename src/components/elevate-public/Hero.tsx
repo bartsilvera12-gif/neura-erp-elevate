@@ -9,7 +9,11 @@ import Link from "next/link";
  */
 export function Hero() {
   return (
-    <section id="top" className="relative min-h-[100svh] flex items-center overflow-hidden">
+    <section id="top" className="relative min-h-[100svh] flex items-center overflow-hidden bg-primary">
+      {/* Fondo sólido bordó: en mobile la imagen es object-contain (banda
+          centrada) y los espacios arriba/abajo se rellenan con este mismo
+          color de marca en vez de mostrar el fondo claro de la página. En
+          desktop la imagen cover tapa todo, así que este bg no se ve. */}
       <div className="absolute inset-0">
         <Image
           src="/brand/elevate/hero-perfume-v2.png"
@@ -17,10 +21,17 @@ export function Hero() {
           fill
           priority
           sizes="100vw"
-          className="object-cover"
+          // Mobile: la imagen es 16:9 y el viewport es vertical; con cover se
+          // recortaba a una tira. Con contain entra completa. Desktop sin
+          // cambios (cover, llena el ancho).
+          className="object-contain object-center md:object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/85 via-primary/55 to-primary/20" />
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-transparent to-transparent" />
+        {/* Mobile: degradado vertical suave para que la imagen se integre con
+            el fondo bordó y el texto (arriba) mantenga contraste. Sobre el
+            fondo sólido primary, las zonas sin imagen quedan bordó uniforme.
+            Desktop: degradados originales. */}
+        <div className="absolute inset-0 bg-gradient-to-b from-primary/85 via-primary/45 to-primary/35 md:bg-gradient-to-r md:from-primary/85 md:via-primary/55 md:to-primary/20" />
+        <div className="absolute inset-0 hidden md:block bg-gradient-to-t from-primary/80 via-transparent to-transparent" />
       </div>
 
       <div className="relative container mx-auto px-6 lg:px-10 pt-32 pb-20 md:py-32 lg:py-40">
