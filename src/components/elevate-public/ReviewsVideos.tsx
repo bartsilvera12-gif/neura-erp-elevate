@@ -301,16 +301,15 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
               <div className="relative aspect-[9/16] bg-black">
                 <video
                   ref={(el) => {
-                    if (el) {
-                      // Estado inicial: muteado (atributo HTML + propiedad JS)
-                      // para habilitar autoplay legal y evitar la race
-                      // condition de React con `muted` (#10389).
-                      el.muted = true;
-                      el.setAttribute("muted", "");
-                      videoRefs.current.set(v.id, el);
-                    } else {
-                      videoRefs.current.delete(v.id);
-                    }
+                    // CLAVE: NO tocar muted acá. El ref callback inline se
+                    // reejecuta en cada render que dispara setUnmutedId, y
+                    // reasignar muted=true acá pisaría el unmute imperativo
+                    // hecho desde applyAudio (este era el bug real). El
+                    // estado inicial "muteado" lo da el atributo `muted` del
+                    // JSX que React aplica solo en mount. Acá solo
+                    // registramos el elemento en el map.
+                    if (el) videoRefs.current.set(v.id, el);
+                    else videoRefs.current.delete(v.id);
                   }}
                   src={v.video_url}
                   poster={v.poster_url ?? undefined}
