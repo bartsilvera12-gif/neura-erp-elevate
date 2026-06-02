@@ -5,46 +5,41 @@ import { ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import type { ResenaVideo } from "./Reviews";
 
 /**
- * Carrusel de videos de reseñas.
+ * Carrusel de videos de reseñas, comportamiento estilo reels.
  *
- * Política de audio (mobile y desktop):
- *  - El video centrado en el carrusel se DESMUTEA automáticamente cuando
- *    (a) la sección está visible en el viewport y (b) el usuario ya hizo
- *    cualquier gesto en la página (requisito de autoplay con sonido del
- *    browser). Al cambiar de video centrado (scroll del carrusel), el
- *    audio salta al nuevo y el anterior se mutea — nunca dos pistas a la
- *    vez.
- *  - Si el browser bloquea el play() con sonido (típicamente iOS Safari
- *    cuando el gesto fue hace mucho), revertimos a muteado sin overlay
- *    ni UI extra; el botón de bocina queda disponible para reintentar.
- *  - El botón de bocina es un override manual: tocarlo fija la decisión
- *    del usuario (muteado o desmuteado) y el flujo auto deja de pisarlo.
+ * Audio:
+ *  - El video más centrado en el carrusel se desmutea solo cuando
+ *    (a) la sección está visible y (b) el browser tiene el audio
+ *    desbloqueado (autoplay policy: requiere un gesto previo del usuario).
+ *  - `syncActiveVideoNow()` recomputa cuál es el activo y aplica el audio
+ *    imperativamente. Se llama desde MUCHOS triggers — montaje, RAF,
+ *    timeouts cortos, IntersectionObserver, scroll del carrusel, canplay
+ *    y loadedmetadata de cada video, y el primer gesto del usuario. Así
+ *    no dependemos de un único evento para sincronizar.
+ *  - Al cambiar el activo: el viejo se mutea y el nuevo se desmutea
+ *    instantáneamente. Nunca dos pistas a la vez.
+ *  - Si play() es rechazado por política, se revierte a muteado en
+ *    silencio (sin overlays/carteles) y el próximo gesto lo reintenta.
+ *  - El botón de bocina sigue funcionando como override manual: si lo
+ *    tocás queda fijo en lo que decidiste hasta que lo vuelvas a tocar.
  *  - El audio se manipula imperativamente sobre el HTMLVideoElement
- *    (muted + atributo HTML + volume + play) para evitar la race condition
- *    de React con `muted` (facebook/react#10389) y para que el toggle quede
- *    en el mismo callstack que el click (requisito de iOS Safari).
- *
- * Hay un único flujo (`applyAudio`) que decide quién suena. Lee de un ref
- * mutable (no React state) para evitar lecturas viejas en callbacks y NO
- * usa React como fuente de verdad — el estado React solo refleja la UI.
+ *    (muted + atributo HTML + volume + play) para sortear la race
+ *    condition de React con `muted` (facebook/react#10389) y mantener
+ *    el call site dentro del callstack del gesto (lo exige iOS Safari).
  */
 export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
   const [unmutedId, setUnmutedId] = useState<string | null>(null);
 
-  // Estado mutable que NO debe causar re-render. Se lee desde callbacks
-  // (observers, scroll, gestos) sin riesgo de closures viejos.
+  // Estado mutable que NO debe causar re-render. Lecturas seguras desde
+  // callbacks (observers, scroll, gestos) sin closures viejos.
   const stateRef = useRef({
-    unlocked: false,
+    audioUnlocked: false,
     sectionVisible: false,
     centeredId: null as string | null,
-    // Si el usuario tocó el botón de bocina, este ref dice cuál fue el
-    // video elegido (o null para "vuelta al modo auto / muteado"). El
-    // flujo auto NUNCA pisa esta decisión.
     manualPick: null as string | null,
-    manualActive: false, // true si manualPick está vigente (incl. "manual mute")
-    autoEnabled: false, // true solo en mobile/tablet
+    manualActive: false,
   });
 
   const scrollByCards = (dir: 1 | -1) => {
@@ -56,22 +51,51 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
   };
 
   /**
-   * Decide quién debe sonar AHORA según el estado en stateRef y lo aplica
-   * imperativamente. Devuelve el id activo (o null) ya reflejado en el DOM.
-   * Síncrono en la parte crítica (mute / muted=false / removeAttribute /
-   * volume); play() se dispara como Promise pero el revert en caso de
-   * rechazo también es síncrono. Esto preserva el gesto de usuario en iOS.
+   * Recalcula cuál es la card más centrada horizontalmente en el carrusel
+   * mirando getBoundingClientRect() en vivo. Devuelve el id o null si no
+   * hay layout todavía.
+   */
+  const computeCentered = (): string | null => {
+    const root = scrollerRef.current;
+    if (!root) return null;
+    const cards = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-review-card]"),
+    );
+    if (cards.length === 0) return null;
+    const rect = root.getBoundingClientRect();
+    if (rect.width === 0) return null;
+    const center = rect.left + rect.width / 2;
+    let best: string | null = null;
+    let bestDist = Infinity;
+    for (const c of cards) {
+      const id = c.dataset.reviewId;
+      if (!id) continue;
+      const r = c.getBoundingClientRect();
+      if (r.width === 0) continue;
+      const cc = r.left + r.width / 2;
+      const d = Math.abs(cc - center);
+      if (d < bestDist) {
+        bestDist = d;
+        best = id;
+      }
+    }
+    return best;
+  };
+
+  /**
+   * Aplica la decisión de audio AHORA al DOM. Idempotente.
+   * Mute a todos los que no son el target; el target queda con
+   * muted=false, atributo removido, volume=1 y play() lanzado.
    */
   const applyAudio = (): string | null => {
     const s = stateRef.current;
     let target: string | null = null;
     if (s.manualActive) {
-      target = s.manualPick; // puede ser null = "manual mute"
-    } else if (s.autoEnabled && s.unlocked && s.sectionVisible) {
+      target = s.manualPick;
+    } else if (s.audioUnlocked && s.sectionVisible) {
       target = s.centeredId;
     }
 
-    // 1) Mutear todos los demás (atributo + propiedad)
     videoRefs.current.forEach((vid, id) => {
       if (id !== target) {
         if (!vid.muted) {
@@ -83,7 +107,6 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
       }
     });
 
-    // 2) Desmutear target (si hay)
     if (target) {
       const vid = videoRefs.current.get(target);
       if (vid) {
@@ -91,10 +114,8 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
         vid.removeAttribute("muted");
         vid.volume = 1;
         vid.play().catch(() => {
-          // El browser rechazó play con sonido (típicamente iOS Safari
-          // cuando el gesto fue hace mucho). Revertir al estado muteado y
-          // dejar que el UI muestre VolumeX para que el usuario pueda
-          // intentarlo manualmente.
+          // Política rechazó: revertir silenciosamente, sin UI ruidosa.
+          // El próximo gesto disparará un nuevo intento via unlock.
           vid.muted = true;
           vid.setAttribute("muted", "");
           setUnmutedId(null);
@@ -105,11 +126,20 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     return target;
   };
 
+  /**
+   * Sincronización completa: recomputa el centrado y aplica el audio.
+   * Es el punto único llamado desde todos los triggers.
+   */
+  const syncActiveVideoNow = (): string | null => {
+    const s = stateRef.current;
+    const found = computeCentered();
+    if (found !== s.centeredId) s.centeredId = found;
+    return applyAudio();
+  };
+
   const handleManualToggle = (id: string) => {
     const s = stateRef.current;
     if (s.manualActive && s.manualPick === id) {
-      // Tocar el mismo: vuelve al modo "manual mute". En desktop = silencio.
-      // En mobile = silencio explícito (no se reactiva auto para no sorprender).
       s.manualPick = null;
       s.manualActive = true;
     } else {
@@ -123,82 +153,114 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
     const root = scrollerRef.current;
     if (!root) return;
     const s = stateRef.current;
-    // Auto-unmute habilitado en todos los viewports: el video centrado
-    // suena solo cuando la sección está visible y el usuario ya hizo
-    // cualquier gesto en la página (requisito de autoplay policy del
-    // browser). El botón de bocina sigue disponible como override manual.
-    s.autoEnabled = true;
-
-    const cards = Array.from(
-      root.querySelectorAll<HTMLElement>("[data-review-card]"),
-    );
 
     const applyPlayback = () => {
-      for (const c of cards) {
-        const cid = c.dataset.reviewId;
-        const vid = cid ? videoRefs.current.get(cid) : null;
-        if (!vid) continue;
+      videoRefs.current.forEach((vid) => {
         if (s.sectionVisible) {
           vid.play().catch(() => {});
         } else {
           vid.pause();
         }
-      }
+      });
     };
 
-    // Cuál card está más centrada → ese es el "auto target" del audio.
-    const computeCentered = () => {
-      const rect = root.getBoundingClientRect();
-      const center = rect.left + rect.width / 2;
-      let best: string | null = null;
-      let bestDist = Infinity;
-      for (const c of cards) {
-        const id = c.dataset.reviewId;
-        if (!id) continue;
-        const r = c.getBoundingClientRect();
-        const cc = r.left + r.width / 2;
-        const d = Math.abs(cc - center);
-        if (d < bestDist) {
-          bestDist = d;
-          best = id;
-        }
-      }
-      if (best !== s.centeredId) {
-        s.centeredId = best;
-        if (s.autoEnabled && !s.manualActive) applyAudio();
-      }
-    };
-    computeCentered();
-    root.addEventListener("scroll", computeCentered, { passive: true });
+    // ───── Triggers de sincronización ─────
 
+    // 1) Inmediatamente al montar.
+    syncActiveVideoNow();
+
+    // 2) En el siguiente frame y con timeouts cortos, por si el layout
+    //    no estaba listo (los videos pueden no tener bounding rect aún).
+    const raf1 = requestAnimationFrame(() => {
+      syncActiveVideoNow();
+      // 3) Otro RAF para cubrir el segundo paint.
+      requestAnimationFrame(() => syncActiveVideoNow());
+    });
+    const t0 = setTimeout(syncActiveVideoNow, 50);
+    const t1 = setTimeout(syncActiveVideoNow, 250);
+    const t2 = setTimeout(syncActiveVideoNow, 800);
+
+    // 4) Por cada video, cuando esté listo para reproducir o tenga
+    //    metadata, resincronizamos — clave en mobile donde el lazy load
+    //    de los videos puede correrse después del primer paint.
+    const onReady = () => syncActiveVideoNow();
+    videoRefs.current.forEach((vid) => {
+      vid.addEventListener("loadedmetadata", onReady);
+      vid.addEventListener("canplay", onReady);
+    });
+
+    // 5) IntersectionObserver de la sección.
     const sectionObs = new IntersectionObserver(
       ([entry]) => {
-        const wasVisible = s.sectionVisible;
         s.sectionVisible = (entry?.intersectionRatio ?? 0) >= 0.1;
         applyPlayback();
-        if (wasVisible !== s.sectionVisible) applyAudio();
+        syncActiveVideoNow();
       },
-      { threshold: [0, 0.1] },
+      { threshold: [0, 0.05, 0.1, 0.5] },
     );
     sectionObs.observe(root);
 
-    // Primer gesto del usuario en cualquier parte de la página: habilita
-    // autoplay con sonido (requisito del browser). El listener se quita
-    // tras la primera vez para no consumir eventos extra.
+    // 6) Scroll del carrusel (horizontal) → cambia el centrado.
+    const onCarouselScroll = () => syncActiveVideoNow();
+    root.addEventListener("scroll", onCarouselScroll, { passive: true });
+
+    // 7) Primer gesto del usuario en cualquier parte de la página.
+    //    Escuchamos un set amplio para captar cualquier interacción:
+    //    pointer/touch/click/key (gestos "duros" que satisfacen la
+    //    autoplay policy) y wheel/scroll (que algunos browsers también
+    //    aceptan; si no, el play() falla y se revierte sin ruido).
+    //    Importante: la PRIMERA vez que se dispara, hacemos la sync
+    //    SINCRÓNICAMENTE dentro del callstack del gesto, no en RAF —
+    //    iOS Safari sólo concede el unlock si el play() ocurre acá.
     const ac = new AbortController();
-    const unlock = () => {
-      if (s.unlocked) return;
-      s.unlocked = true;
-      ac.abort();
-      if (s.autoEnabled && !s.manualActive) applyAudio();
+    let rafScheduled = false;
+    const scheduleSync = () => {
+      if (rafScheduled) return;
+      rafScheduled = true;
+      requestAnimationFrame(() => {
+        rafScheduled = false;
+        syncActiveVideoNow();
+      });
     };
-    for (const ev of ["pointerdown", "touchend", "keydown", "click"] as const) {
-      window.addEventListener(ev, unlock, { signal: ac.signal, passive: true });
+    const onGesture = () => {
+      if (!s.audioUnlocked) {
+        s.audioUnlocked = true;
+        // Sincronía obligatoria para conservar el "user gesture token"
+        // que exige iOS para habilitar audio.
+        syncActiveVideoNow();
+      } else {
+        // Subsecuentes gestos: throttle a 1 por frame.
+        scheduleSync();
+      }
+    };
+    const gestureEvents = [
+      "pointerdown",
+      "touchstart",
+      "touchend",
+      "click",
+      "keydown",
+      "wheel",
+      "scroll",
+    ] as const;
+    for (const ev of gestureEvents) {
+      window.addEventListener(ev, onGesture, {
+        signal: ac.signal,
+        passive: true,
+        capture: ev === "scroll" ? true : false,
+      });
     }
 
     return () => {
-      root.removeEventListener("scroll", computeCentered);
+      cancelAnimationFrame(raf1);
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      videoRefs.current.forEach((vid) => {
+        vid.removeEventListener("loadedmetadata", onReady);
+        vid.removeEventListener("canplay", onReady);
+      });
       sectionObs.disconnect();
+      root.removeEventListener("scroll", onCarouselScroll);
       ac.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,9 +302,9 @@ export function ReviewsVideos({ videos }: { videos: ResenaVideo[] }) {
                 <video
                   ref={(el) => {
                     if (el) {
-                      // Estado inicial: muteado (HTML attr + propiedad JS) para
-                      // habilitar autoplay legal y evitar la race condition de
-                      // React con `muted` (#10389).
+                      // Estado inicial: muteado (atributo HTML + propiedad JS)
+                      // para habilitar autoplay legal y evitar la race
+                      // condition de React con `muted` (#10389).
                       el.muted = true;
                       el.setAttribute("muted", "");
                       videoRefs.current.set(v.id, el);
