@@ -20,6 +20,8 @@ export interface ProductoParsed {
   nombre: string;
   sku: string;
   modelo: string;
+  marca: string;
+  descripcion_corta: string;
   codigo_barras: string;
   categoria_nombre: string;
   proveedor_nombre: string;
@@ -44,8 +46,26 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
   return rows.map((r, idx) => {
     const errors: string[] = [];
     const warnings: string[] = [];
-    const nombre = normalizeUpperText(pick(r, "NOMBRE"));
-    if (!nombre) errors.push("NOMBRE obligatorio.");
+    const marca = normalizeUpperText(pick(r, "MARCA"));
+    const modelo = normalizeUpperText(pick(r, "MODELO", "SKU_PRODUCT", "SKU PRODUCT"));
+    const descripcion_corta = normalizeUpperText(
+      pick(r, "SKU_DESCRIPCION", "SKU DESCRIPCION", "DESCRIPCION_CORTA", "DESCRIPCION CORTA", "DESCRIPCION")
+    );
+    // NOMBRE: explícito si viene; sino derivamos en este orden de preferencia:
+    //   1) MARCA + " " + MODELO  (ej: "DIOR SAUVAGE")
+    //   2) MODELO solo
+    //   3) SKU DESCRIPCION
+    // Esto deja que planillas sin columna NOMBRE igual funcionen.
+    let nombre = normalizeUpperText(pick(r, "NOMBRE"));
+    if (!nombre) {
+      const combo = [marca, modelo].filter(Boolean).join(" ").trim();
+      if (combo) nombre = combo;
+      else if (modelo) nombre = modelo;
+      else if (descripcion_corta) nombre = descripcion_corta;
+    }
+    if (!nombre) {
+      errors.push("NOMBRE obligatorio (también podés cargar MARCA + SKU PRODUCT, o SKU DESCRIPCION).");
+    }
     const sku = normalizeUpperText(pick(r, "SKU"));
     const codigo_barras_raw = normalizeUpperText(pick(r, "CODIGO_BARRAS", "CODIGOBARRAS"));
     if (codigo_barras_raw && /^INT-/i.test(codigo_barras_raw)) {
@@ -53,7 +73,6 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
     }
     const mv = normalizeUpperText(pick(r, "METODO_VALUACION", "METODOVALUACION"));
     const metodo_valuacion = (METODOS.has(mv) ? mv : "CPP") as "CPP" | "FIFO" | "LIFO";
-    const modelo = normalizeUpperText(pick(r, "MODELO", "SKU_PRODUCT", "SKU PRODUCT"));
     const cantMinMinRaw = pickNumber(
       r,
       "CANTIDAD_MINIMA_MINORISTA",
@@ -74,6 +93,8 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
       nombre,
       sku,
       modelo,
+      marca,
+      descripcion_corta,
       codigo_barras: codigo_barras_raw,
       categoria_nombre: normalizeUpperText(pick(r, "CATEGORIA", "CATEGORIA_PRINCIPAL")),
       proveedor_nombre: normalizeUpperText(pick(r, "PROVEEDOR_PRINCIPAL", "PROVEEDOR")),
@@ -213,7 +234,8 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       warnings: p.warnings,
       errors: p.errors,
       data: {
-        NOMBRE: p.nombre, SKU: p.sku, CODIGO_BARRAS: p.codigo_barras || "(auto)",
+        NOMBRE: p.nombre, SKU: p.sku, MODELO: p.modelo, MARCA: p.marca,
+        CODIGO_BARRAS: p.codigo_barras || "(auto)",
         CATEGORIA: p.categoria_nombre, PROVEEDOR: p.proveedor_nombre, UBICACION: p.ubicacion_nombre,
         COSTO: p.costo_promedio, PRECIO: p.precio_venta, STOCK: p.stock_actual,
         STOCK_ANTERIOR: stockAnterior ?? "",
@@ -236,7 +258,7 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       unidades_salida: totalSalida,
     },
     rows,
-    headers: ["NOMBRE","SKU","MODELO","CODIGO_BARRAS","CATEGORIA","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","STOCK_ACTUAL","STOCK_MINIMO","CANTIDAD_MINIMA_MINORISTA","METODO_VALUACION","ACTIVO","ACORDES_PRINCIPALES"],
+    headers: ["NOMBRE","SKU","MODELO","SKU_DESCRIPCION","MARCA","CODIGO_BARRAS","CATEGORIA","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","STOCK_ACTUAL","STOCK_MINIMO","CANTIDAD_MINIMA_MINORISTA","METODO_VALUACION","ACTIVO","ACORDES_PRINCIPALES"],
   };
 }
 
@@ -374,11 +396,14 @@ export async function commitProductos(
                cantidad_minima_minorista=$10::int,
                metodo_valuacion=$11, activo=$12::boolean,
                categoria_principal_id=$13::uuid, proveedor_principal_id=$14::uuid, ubicacion_principal_id=$15::uuid,
+               marca=NULLIF($18,''),
+               descripcion_corta=NULLIF($19,''),
                updated_at=now()
              WHERE id=$16::uuid AND empresa_id=$17::uuid`,
             [p.nombre, p.sku, p.modelo, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
              p.stock_actual, p.stock_minimo, p.cantidad_minima_minorista, p.metodo_valuacion, p.activo,
-             categoriaId, proveedorId, ubicacionId, p.match_id, empresaId]
+             categoriaId, proveedorId, ubicacionId, p.match_id, empresaId,
+             p.marca, p.descripcion_corta]
           );
           out.updated++;
           // Sincronizar acordes (reemplazar selección).
@@ -418,17 +443,20 @@ export async function commitProductos(
                empresa_id, nombre, sku, modelo, codigo_barras, codigo_barras_interno,
                unidad_medida, costo_promedio, precio_venta, stock_actual, stock_minimo,
                cantidad_minima_minorista,
-               metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id
+               metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id,
+               marca, descripcion_corta
              ) VALUES (
                $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), $6::boolean,
                $7, $8::numeric, $9::numeric, $10::numeric, $11::numeric,
                $12::int,
-               $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid
+               $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid,
+               NULLIF($18,''), NULLIF($19,'')
              ) RETURNING id`,
             [empresaId, p.nombre, p.sku, p.modelo, codigoBarras, codigoInterno,
              p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
              p.cantidad_minima_minorista,
-             p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId]
+             p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId,
+             p.marca, p.descripcion_corta]
           );
           out.inserted++;
           // Sincronizar acordes para producto nuevo.
@@ -539,6 +567,8 @@ export const PRODUCTOS_TEMPLATE_ROW = {
   NOMBRE: "EJEMPLO PRODUCTO",
   SKU: "EJ-001",
   MODELO: "SAUVAGE",
+  SKU_DESCRIPCION: "EAU DE PARFUM 100ML",
+  MARCA: "DIOR",
   CODIGO_BARRAS: "",
   CATEGORIA: "ELECTRICIDAD",
   PROVEEDOR_PRINCIPAL: "DON HERRAMIENTAS SA",
