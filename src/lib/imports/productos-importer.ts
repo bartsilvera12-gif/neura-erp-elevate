@@ -301,6 +301,7 @@ export async function commitProductos(
   const tA = quoteSchemaTable(schema, "acordes_olfativos");
   const tPA = quoteSchemaTable(schema, "producto_acordes");
   const tSec = `"${schema.replace(/"/g, '""')}".incrementar_secuencia_producto`;
+  const fnSkuGen = `"${schema.replace(/"/g, '""')}".generar_sku_producto`;
   const refImport = `IMPORT_EXCEL:${(ctx.filename ?? "").slice(0, 80)}`;
 
   const out: CommitOutcome = {
@@ -425,6 +426,30 @@ export async function commitProductos(
             );
           }
         } else {
+          // Generar SKU automático si no vino (formato ELE_PER_####), igual
+          // que el botón "Generar SKU" del form de nuevo producto.
+          let skuFinal = p.sku;
+          if (!skuFinal) {
+            try {
+              const r = await pool.query<{ v: string }>(
+                `SELECT ${fnSkuGen}($1::uuid, $2) AS v`,
+                [empresaId, "ELE_PER"]
+              );
+              const generated = r.rows[0]?.v?.trim();
+              if (generated) {
+                skuFinal = generated;
+                out.warningMessages.push(`Fila ${p.row_number}: SKU vacío → generado ${generated}`);
+              } else {
+                out.errorMessages.push(`Fila ${p.row_number}: no se pudo generar SKU automático.`);
+                out.errors++;
+                continue;
+              }
+            } catch (e) {
+              out.errorMessages.push(`Fila ${p.row_number}: error generando SKU (${(e as Error).message.slice(0, 100)})`);
+              out.errors++;
+              continue;
+            }
+          }
           // Generar codigo_barras_interno si no vino
           let codigoBarras = p.codigo_barras;
           let codigoInterno = false;
@@ -452,7 +477,7 @@ export async function commitProductos(
                $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid,
                NULLIF($18,''), NULLIF($19,'')
              ) RETURNING id`,
-            [empresaId, p.nombre, p.sku, p.modelo, codigoBarras, codigoInterno,
+            [empresaId, p.nombre, skuFinal, p.modelo, codigoBarras, codigoInterno,
              p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
              p.cantidad_minima_minorista,
              p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId,
