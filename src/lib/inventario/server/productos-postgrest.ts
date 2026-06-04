@@ -22,7 +22,8 @@ import {
 } from "./productos-pg";
 
 const RETURNING_COLS =
-  "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "id,empresa_id,nombre,sku,modelo,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "cantidad_minima_minorista," +
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
@@ -90,12 +91,15 @@ export async function insertProductoPostgrest(
     empresa_id: empresaId,
     nombre: d.nombre,
     sku: d.sku,
+    modelo: d.modelo ?? null,
     costo_promedio: d.costo_promedio,
     precio_venta: d.precio_venta,
     stock_actual: d.stock_actual,
     stock_minimo: d.stock_minimo,
+    cantidad_minima_minorista: d.cantidad_minima_minorista ?? null,
     unidad_medida: d.unidad_medida,
     metodo_valuacion: d.metodo_valuacion,
+    activo: d.activo === false ? false : true,
     codigo_barras: d.codigo_barras,
     codigo_barras_interno: d.codigo_barras ? d.codigo_barras_interno : false,
     categoria_principal_id: d.categoria_principal_id ?? null,
@@ -147,8 +151,9 @@ export async function updateProductoPostgrest(
 ): Promise<ProductoRow | null> {
   const body: Record<string, unknown> = {};
   const keys: (keyof UpdateProductoInput)[] = [
-    "nombre", "sku", "costo_promedio", "precio_venta", "stock_actual", "stock_minimo",
-    "unidad_medida", "metodo_valuacion", "codigo_barras", "codigo_barras_interno",
+    "nombre", "sku", "modelo", "costo_promedio", "precio_venta", "stock_actual", "stock_minimo",
+    "cantidad_minima_minorista",
+    "unidad_medida", "metodo_valuacion", "activo", "codigo_barras", "codigo_barras_interno",
     "imagen_path", "imagen_url",
     "categoria_principal_id", "ubicacion_principal_id", "proveedor_principal_id",
     "slug_web", "visible_web", "destacado_web", "descripcion_corta", "descripcion_web",

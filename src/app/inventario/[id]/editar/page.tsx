@@ -17,6 +17,7 @@ import {
   type CatalogoWebState,
 } from "@/components/inventario/CatalogoWebFields";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { AcordesSelector } from "@/components/inventario/AcordesSelector";
 
 interface CatRow { id: string; nombre: string }
 interface UbiRow { id: string; nombre: string; tipo: string }
@@ -34,6 +35,7 @@ export default function EditarProductoPage() {
   const [form, setForm] = useState({
     nombre: "",
     sku: "",
+    modelo: "",
     codigo_barras: "",
     codigo_barras_interno: false,
     costo_promedio: "",
@@ -41,10 +43,14 @@ export default function EditarProductoPage() {
     precio_venta: "",
     stock_actual: "",
     stock_minimo: "",
+    cantidad_minima_minorista: "",
     unidad_medida: "",
     metodo_valuacion: "CPP" as MetodoValuacion,
+    activo: true,
     es_decant: false,
   });
+  const [acordesSeleccionados, setAcordesSeleccionados] = useState<string[]>([]);
+  const [acordesOriginal, setAcordesOriginal] = useState<string[]>([]);
   const [imagenPath, setImagenPath] = useState<string | null>(null);
   const [imagenUrl, setImagenUrl] = useState<string | null>(null);
   const [codigoOriginal, setCodigoOriginal] = useState<string | null>(null);
@@ -174,6 +180,7 @@ export default function EditarProductoPage() {
       setForm({
         nombre: p.nombre,
         sku: p.sku,
+        modelo: p.modelo ?? "",
         codigo_barras: p.codigo_barras ?? "",
         codigo_barras_interno: p.codigo_barras_interno === true,
         costo_promedio: String(p.costo_promedio),
@@ -181,8 +188,11 @@ export default function EditarProductoPage() {
         precio_venta: String(p.precio_venta),
         stock_actual: String(p.stock_actual),
         stock_minimo: String(p.stock_minimo),
+        cantidad_minima_minorista:
+          p.cantidad_minima_minorista == null ? "" : String(p.cantidad_minima_minorista),
         unidad_medida: p.unidad_medida,
         metodo_valuacion: p.metodo_valuacion,
+        activo: p.activo !== false,
         es_decant: p.es_decant === true,
       });
       setCodigoOriginal(p.codigo_barras ?? null);
@@ -225,6 +235,20 @@ export default function EditarProductoPage() {
         notas_heart_csv: "",
         notas_base_csv: "",
       });
+
+      // Hidratar acordes principales (best-effort).
+      fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}/acordes`, {
+        cache: "no-store",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          if (cancelled || !j?.success) return;
+          const rows = (j.data?.acordes ?? []) as Array<{ acorde_id: string }>;
+          const ids = rows.map((r) => r.acorde_id);
+          setAcordesSeleccionados(ids);
+          setAcordesOriginal(ids);
+        })
+        .catch(() => undefined);
 
       // Hidratar familia + notas
       fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}/catalogo-extras`, {
@@ -319,15 +343,24 @@ export default function EditarProductoPage() {
       const slugEfectivo = cw.slug_web
         ? slugify(cw.slug_web)
         : cw.visible_web ? slugify(form.nombre) : null;
+      const cantMinMinorista = (() => {
+        const t = form.cantidad_minima_minorista.trim();
+        if (!t) return null;
+        const n = parseInt(t, 10);
+        return Number.isFinite(n) && n >= 1 ? n : null;
+      })();
       const updatePayload: Parameters<typeof updateProducto>[1] = {
         nombre: form.nombre.trim().toUpperCase(),
         sku: form.sku.trim().toUpperCase(),
+        modelo: form.modelo.trim() ? form.modelo.trim().toUpperCase() : null,
         costo_promedio: parseFloat(form.costo_promedio) || 0,
         precio_venta: parseFloat(form.precio_venta) || 0,
         stock_actual: parseInt(form.stock_actual) || 0,
         stock_minimo: parseInt(form.stock_minimo) || 0,
+        cantidad_minima_minorista: cantMinMinorista,
         unidad_medida: form.unidad_medida.trim().toUpperCase(),
         metodo_valuacion: form.metodo_valuacion,
+        activo: form.activo === true,
         es_decant: form.es_decant === true,
         categoria_principal_id: categoriaId,
         ubicacion_principal_id: ubicacionId,
@@ -395,6 +428,21 @@ export default function EditarProductoPage() {
               });
             } catch (e) {
               console.warn("[editar producto] catálogo extras fallaron", e);
+            }
+          }
+          // Acordes: solo enviar si cambiaron (orden o composición).
+          const cambioAcordes =
+            acordesSeleccionados.length !== acordesOriginal.length ||
+            acordesSeleccionados.some((id, i) => id !== acordesOriginal[i]);
+          if (cambioAcordes) {
+            try {
+              await fetchWithSupabaseSession(`/api/productos/${encodeURIComponent(id)}/acordes`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ acorde_ids: acordesSeleccionados }),
+              });
+            } catch (e) {
+              console.warn("[editar producto] acordes fallaron", e);
             }
           }
           router.push("/inventario");
@@ -477,6 +525,24 @@ export default function EditarProductoPage() {
             />
           </div>
 
+          {/* Modelo (SKU PRODUCT) */}
+          <div>
+            <label className={labelClass}>
+              Modelo del perfume{" "}
+              <span className="ml-1 text-[10px] uppercase tracking-wider bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal">
+                SKU PRODUCT
+              </span>
+            </label>
+            <input
+              type="text"
+              name="modelo"
+              value={form.modelo}
+              onChange={handleChange}
+              placeholder="Ej: SAUVAGE, 1 MILLION, BLEU DE CHANEL"
+              className={`${inputClass} uppercase`}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-6">
             <div>
               <label className={labelClass}>SKU</label>
@@ -526,27 +592,48 @@ export default function EditarProductoPage() {
             </div>
           </div>
 
-          {/* Es decant / muestra (Fase Decants) */}
-          <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                name="es_decant"
-                checked={form.es_decant === true}
-                onChange={(e) => setForm((prev) => ({ ...prev, es_decant: e.target.checked }))}
-                className="mt-0.5 h-4 w-4"
-              />
-              <span>
-                <span className="block text-sm font-semibold text-emerald-900">
-                  Es decant / muestra
+          {/* Activo + Es decant */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-slate-200 bg-slate-50/40 rounded-lg p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="activo"
+                  checked={form.activo === true}
+                  onChange={(e) => setForm((prev) => ({ ...prev, activo: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-slate-900">
+                    Producto activo
+                  </span>
+                  <span className="block text-xs text-slate-600 mt-0.5">
+                    Si está apagado, el producto no aparece en listados de venta ni en
+                    el catálogo público.
+                  </span>
                 </span>
-                <span className="block text-xs text-emerald-800/80 mt-0.5">
-                  Usalo para productos pequeños que pueden venderse o entregarse como
-                  obsequio. Si se entrega sin cargo en Ventas, descuenta stock y registra
-                  costo promocional.
+              </label>
+            </div>
+            <div className="border border-emerald-200 bg-emerald-50/40 rounded-lg p-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="es_decant"
+                  checked={form.es_decant === true}
+                  onChange={(e) => setForm((prev) => ({ ...prev, es_decant: e.target.checked }))}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-emerald-900">
+                    Es decant / muestra
+                  </span>
+                  <span className="block text-xs text-emerald-800/80 mt-0.5">
+                    Para productos pequeños que pueden entregarse como obsequio. Si se
+                    entrega sin cargo en Ventas, descuenta stock y registra costo promocional.
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+            </div>
           </div>
 
           {/* Código de barras */}
@@ -740,7 +827,7 @@ export default function EditarProductoPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className={labelClass}>Stock actual</label>
               <input
@@ -768,6 +855,21 @@ export default function EditarProductoPage() {
                 required
               />
             </div>
+            <div>
+              <label className={labelClass}>Cantidad mínima venta (minorista)</label>
+              <input
+                type="number"
+                name="cantidad_minima_minorista"
+                value={form.cantidad_minima_minorista}
+                onChange={handleChange}
+                placeholder="Vacío = sin mínimo"
+                className={inputClass}
+                min={1}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Referencia informativa para venta minorista (opcional).
+              </p>
+            </div>
           </div>
 
           {/* Método de valuación: fijo en CPP — no editable desde la UI.
@@ -787,6 +889,12 @@ export default function EditarProductoPage() {
             </select>
           </div>
           )}
+
+          {/* Acordes principales (con imagen, catálogo global) */}
+          <AcordesSelector
+            value={acordesSeleccionados}
+            onChange={setAcordesSeleccionados}
+          />
 
           <CatalogoWebFields
             value={catWeb}

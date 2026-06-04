@@ -64,10 +64,12 @@ export interface ProductoRow {
   empresa_id: string;
   nombre: string;
   sku: string;
+  modelo: string | null;
   costo_promedio: string | number;
   precio_venta: string | number;
   stock_actual: string | number;
   stock_minimo: string | number;
+  cantidad_minima_minorista: number | null;
   unidad_medida: string;
   metodo_valuacion: string;
   activo: boolean;
@@ -109,12 +111,15 @@ export interface ProductoRow {
 export interface InsertProductoInput {
   nombre: string;
   sku: string;
+  modelo?: string | null;
   costo_promedio: number;
   precio_venta: number;
   stock_actual: number;
   stock_minimo: number;
+  cantidad_minima_minorista?: number | null;
   unidad_medida: string;
   metodo_valuacion: "CPP" | "FIFO" | "LIFO";
+  activo?: boolean;
   codigo_barras: string | null;
   codigo_barras_interno: boolean;
   categoria_principal_id?: string | null;
@@ -147,7 +152,8 @@ export interface InsertProductoInput {
 }
 
 const RETURNING = `
-  id, empresa_id, nombre, sku, costo_promedio, precio_venta, stock_actual, stock_minimo,
+  id, empresa_id, nombre, sku, modelo, costo_promedio, precio_venta, stock_actual, stock_minimo,
+  cantidad_minima_minorista,
   unidad_medida, metodo_valuacion, activo, created_at, updated_at,
   codigo_barras, codigo_barras_interno, imagen_path, imagen_url,
   categoria_principal_id, ubicacion_principal_id, proveedor_principal_id,
@@ -233,12 +239,15 @@ export async function insertProducto(
 export interface UpdateProductoInput {
   nombre?: string;
   sku?: string;
+  modelo?: string | null;
   costo_promedio?: number;
   precio_venta?: number;
   stock_actual?: number;
   stock_minimo?: number;
+  cantidad_minima_minorista?: number | null;
   unidad_medida?: string;
   metodo_valuacion?: "CPP" | "FIFO" | "LIFO";
+  activo?: boolean;
   codigo_barras?: string | null;
   codigo_barras_interno?: boolean;
   imagen_path?: string | null;
@@ -291,12 +300,20 @@ export async function updateProductoPg(
   }
   if (patch.nombre !== undefined) add("nombre", patch.nombre);
   if (patch.sku !== undefined) add("sku", patch.sku);
+  if (patch.modelo !== undefined) add("modelo", patch.modelo || null);
   if (patch.costo_promedio !== undefined) add("costo_promedio", patch.costo_promedio, "::numeric");
   if (patch.precio_venta !== undefined) add("precio_venta", patch.precio_venta, "::numeric");
   if (patch.stock_actual !== undefined) add("stock_actual", patch.stock_actual, "::numeric");
   if (patch.stock_minimo !== undefined) add("stock_minimo", patch.stock_minimo, "::numeric");
+  if (patch.cantidad_minima_minorista !== undefined)
+    add(
+      "cantidad_minima_minorista",
+      patch.cantidad_minima_minorista == null ? null : patch.cantidad_minima_minorista,
+      "::int"
+    );
   if (patch.unidad_medida !== undefined) add("unidad_medida", patch.unidad_medida);
   if (patch.metodo_valuacion !== undefined) add("metodo_valuacion", patch.metodo_valuacion);
+  if (patch.activo !== undefined) add("activo", patch.activo === true, "::boolean");
   if (patch.codigo_barras !== undefined) {
     add("codigo_barras", patch.codigo_barras || null);
     if (patch.codigo_barras_interno !== undefined) {
@@ -519,10 +536,13 @@ export function rowToProductoApi(r: ProductoRow): Record<string, unknown> {
     empresa_id: r.empresa_id,
     nombre: r.nombre,
     sku: r.sku,
+    modelo: r.modelo ?? null,
     costo_promedio: Number(r.costo_promedio),
     precio_venta: Number(r.precio_venta),
     stock_actual: Number(r.stock_actual),
     stock_minimo: Number(r.stock_minimo),
+    cantidad_minima_minorista:
+      r.cantidad_minima_minorista == null ? null : Number(r.cantidad_minima_minorista),
     unidad_medida: r.unidad_medida,
     metodo_valuacion: r.metodo_valuacion,
     activo: r.activo,

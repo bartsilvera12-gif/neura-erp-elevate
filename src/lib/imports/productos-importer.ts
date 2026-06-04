@@ -6,6 +6,7 @@ import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
 import type { PreviewRow, PreviewResponse } from "@/lib/excel/import-types";
 import { pick, pickNumber, pickBool, chunked } from "./import-helpers";
+import type { Pool } from "pg";
 
 interface ProductoExistente {
   id: string;
@@ -18,6 +19,7 @@ export interface ProductoParsed {
   row_number: number;
   nombre: string;
   sku: string;
+  modelo: string;
   codigo_barras: string;
   categoria_nombre: string;
   proveedor_nombre: string;
@@ -27,8 +29,10 @@ export interface ProductoParsed {
   precio_venta: number;
   stock_actual: number;
   stock_minimo: number;
+  cantidad_minima_minorista: number | null;
   metodo_valuacion: "CPP" | "FIFO" | "LIFO";
   activo: boolean;
+  acordes: string[];
   errors: string[];
   warnings: string[];
   match_id?: string | null;
@@ -49,10 +53,27 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
     }
     const mv = normalizeUpperText(pick(r, "METODO_VALUACION", "METODOVALUACION"));
     const metodo_valuacion = (METODOS.has(mv) ? mv : "CPP") as "CPP" | "FIFO" | "LIFO";
+    const modelo = normalizeUpperText(pick(r, "MODELO", "SKU_PRODUCT", "SKU PRODUCT"));
+    const cantMinMinRaw = pickNumber(
+      r,
+      "CANTIDAD_MINIMA_MINORISTA",
+      "CANTIDAD MINIMA MINORISTA",
+      "CANTIDAD_MINIMA_V_MINORISTA"
+    );
+    const cantidad_minima_minorista =
+      Number.isFinite(cantMinMinRaw) && cantMinMinRaw >= 1
+        ? Math.floor(cantMinMinRaw)
+        : null;
+    const acordesCsv = pick(r, "ACORDES_PRINCIPALES", "ACORDES", "ACORDES PRINCIPALES", "ACORDES_OLFATIVOS");
+    const acordes = acordesCsv
+      .split(/[,;]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
     return {
       row_number: idx + 2,
       nombre,
       sku,
+      modelo,
       codigo_barras: codigo_barras_raw,
       categoria_nombre: normalizeUpperText(pick(r, "CATEGORIA", "CATEGORIA_PRINCIPAL")),
       proveedor_nombre: normalizeUpperText(pick(r, "PROVEEDOR_PRINCIPAL", "PROVEEDOR")),
@@ -62,8 +83,10 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
       precio_venta: pickNumber(r, "PRECIO_VENTA"),
       stock_actual: pickNumber(r, "STOCK_ACTUAL"),
       stock_minimo: pickNumber(r, "STOCK_MINIMO"),
+      cantidad_minima_minorista,
       metodo_valuacion,
       activo: pickBool(r, "ACTIVO"),
+      acordes,
       errors,
       warnings,
     };
@@ -213,7 +236,7 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       unidades_salida: totalSalida,
     },
     rows,
-    headers: ["NOMBRE","SKU","CODIGO_BARRAS","CATEGORIA","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","STOCK_ACTUAL","STOCK_MINIMO","METODO_VALUACION","ACTIVO"],
+    headers: ["NOMBRE","SKU","MODELO","CODIGO_BARRAS","CATEGORIA","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","STOCK_ACTUAL","STOCK_MINIMO","CANTIDAD_MINIMA_MINORISTA","METODO_VALUACION","ACTIVO","ACORDES_PRINCIPALES"],
   };
 }
 
@@ -253,6 +276,8 @@ export async function commitProductos(
   const tPr = quoteSchemaTable(schema, "proveedores");
   const tU = quoteSchemaTable(schema, "inventario_ubicaciones");
   const tM = quoteSchemaTable(schema, "movimientos_inventario");
+  const tA = quoteSchemaTable(schema, "acordes_olfativos");
+  const tPA = quoteSchemaTable(schema, "producto_acordes");
   const tSec = `"${schema.replace(/"/g, '""')}".incrementar_secuencia_producto`;
   const refImport = `IMPORT_EXCEL:${(ctx.filename ?? "").slice(0, 80)}`;
 
@@ -343,18 +368,27 @@ export async function commitProductos(
           const stockAnterior = Number(prevQ.rows[0]?.stock_actual ?? 0);
           await pool.query(
             `UPDATE ${tP} SET
-               nombre=$1, sku=$2, codigo_barras=NULLIF($3,''),
-               unidad_medida=$4, costo_promedio=$5::numeric, precio_venta=$6::numeric,
-               stock_actual=$7::numeric, stock_minimo=$8::numeric,
-               metodo_valuacion=$9, activo=$10::boolean,
-               categoria_principal_id=$11::uuid, proveedor_principal_id=$12::uuid, ubicacion_principal_id=$13::uuid,
+               nombre=$1, sku=$2, modelo=NULLIF($3,''), codigo_barras=NULLIF($4,''),
+               unidad_medida=$5, costo_promedio=$6::numeric, precio_venta=$7::numeric,
+               stock_actual=$8::numeric, stock_minimo=$9::numeric,
+               cantidad_minima_minorista=$10::int,
+               metodo_valuacion=$11, activo=$12::boolean,
+               categoria_principal_id=$13::uuid, proveedor_principal_id=$14::uuid, ubicacion_principal_id=$15::uuid,
                updated_at=now()
-             WHERE id=$14::uuid AND empresa_id=$15::uuid`,
-            [p.nombre, p.sku, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
-             p.stock_actual, p.stock_minimo, p.metodo_valuacion, p.activo,
+             WHERE id=$16::uuid AND empresa_id=$17::uuid`,
+            [p.nombre, p.sku, p.modelo, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
+             p.stock_actual, p.stock_minimo, p.cantidad_minima_minorista, p.metodo_valuacion, p.activo,
              categoriaId, proveedorId, ubicacionId, p.match_id, empresaId]
           );
           out.updated++;
+          // Sincronizar acordes (reemplazar selección).
+          if (p.acordes.length > 0) {
+            try {
+              await syncAcordesPorNombre(pool, tA, tPA, empresaId, p.match_id, p.acordes);
+            } catch (e) {
+              out.warningMessages.push(`Fila ${p.row_number}: acordes no sincronizados (${(e as Error).message.slice(0, 100)})`);
+            }
+          }
           // Movimiento por delta (ajuste_manual + ENTRADA/SALIDA segun signo)
           const delta = p.stock_actual - stockAnterior;
           if (delta !== 0) {
@@ -381,19 +415,30 @@ export async function commitProductos(
           }
           const inserted = await pool.query<{ id: string }>(
             `INSERT INTO ${tP} (
-               empresa_id, nombre, sku, codigo_barras, codigo_barras_interno,
+               empresa_id, nombre, sku, modelo, codigo_barras, codigo_barras_interno,
                unidad_medida, costo_promedio, precio_venta, stock_actual, stock_minimo,
+               cantidad_minima_minorista,
                metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id
              ) VALUES (
-               $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), $5::boolean,
-               $6, $7::numeric, $8::numeric, $9::numeric, $10::numeric,
-               $11, $12::boolean, $13::uuid, $14::uuid, $15::uuid
+               $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), $6::boolean,
+               $7, $8::numeric, $9::numeric, $10::numeric, $11::numeric,
+               $12::int,
+               $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid
              ) RETURNING id`,
-            [empresaId, p.nombre, p.sku, codigoBarras, codigoInterno,
+            [empresaId, p.nombre, p.sku, p.modelo, codigoBarras, codigoInterno,
              p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
+             p.cantidad_minima_minorista,
              p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId]
           );
           out.inserted++;
+          // Sincronizar acordes para producto nuevo.
+          if (p.acordes.length > 0 && inserted.rows[0]?.id) {
+            try {
+              await syncAcordesPorNombre(pool, tA, tPA, empresaId, inserted.rows[0].id, p.acordes);
+            } catch (e) {
+              out.warningMessages.push(`Fila ${p.row_number}: acordes no sincronizados (${(e as Error).message.slice(0, 100)})`);
+            }
+          }
           // Movimiento de inventario inicial si stock > 0
           if (p.stock_actual > 0 && inserted.rows[0]?.id) {
             await registrarMovimiento(
@@ -419,10 +464,81 @@ export async function commitProductos(
   return out;
 }
 
+/**
+ * Reemplaza la selección de acordes de un producto, resolviendo por nombre
+ * contra `acordes_olfativos` (case-insensitive). Si un nombre no existe en el
+ * catálogo, lo crea on-the-fly. El orden se preserva (0..N) según el array.
+ */
+async function syncAcordesPorNombre(
+  pool: Pool,
+  tA: string,
+  tPA: string,
+  empresaId: string,
+  productoId: string,
+  nombres: string[]
+): Promise<void> {
+  // Limpia espacios y deduplica preservando orden.
+  const limpios: string[] = [];
+  const vistos = new Set<string>();
+  for (const raw of nombres) {
+    const v = raw.trim();
+    if (!v) continue;
+    const k = v.toLowerCase();
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    limpios.push(v);
+  }
+  // Borrar selección actual.
+  await pool.query(
+    `DELETE FROM ${tPA} WHERE producto_id=$1::uuid AND empresa_id=$2::uuid`,
+    [productoId, empresaId]
+  );
+  if (limpios.length === 0) return;
+
+  // Resolver/crear cada acorde y armar pares ordenados.
+  const ids: string[] = [];
+  for (const nombre of limpios) {
+    const slug = nombre
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+    // Buscar por nombre case-insensitive en la empresa.
+    const found = await pool.query<{ id: string }>(
+      `SELECT id FROM ${tA} WHERE empresa_id=$1::uuid AND lower(btrim(nombre)) = lower(btrim($2)) LIMIT 1`,
+      [empresaId, nombre]
+    );
+    let acordeId = found.rows[0]?.id ?? null;
+    if (!acordeId) {
+      const ins = await pool.query<{ id: string }>(
+        `INSERT INTO ${tA} (empresa_id, nombre, slug_web)
+         VALUES ($1::uuid, $2, $3)
+         ON CONFLICT ON CONSTRAINT acordes_slug_web_unico_por_empresa DO UPDATE SET nombre=EXCLUDED.nombre
+         RETURNING id`,
+        [empresaId, nombre, slug]
+      );
+      acordeId = ins.rows[0]?.id ?? null;
+    }
+    if (acordeId) ids.push(acordeId);
+  }
+  // Insertar relaciones con orden 0..N.
+  for (let i = 0; i < ids.length; i++) {
+    await pool.query(
+      `INSERT INTO ${tPA} (empresa_id, producto_id, acorde_id, orden)
+       VALUES ($1::uuid, $2::uuid, $3::uuid, $4::int)
+       ON CONFLICT (producto_id, acorde_id) DO UPDATE SET orden=EXCLUDED.orden`,
+      [empresaId, productoId, ids[i], i]
+    );
+  }
+}
+
 /** Helper sin uso directo aqui pero util al exponer en templates */
 export const PRODUCTOS_TEMPLATE_ROW = {
   NOMBRE: "EJEMPLO PRODUCTO",
   SKU: "EJ-001",
+  MODELO: "SAUVAGE",
   CODIGO_BARRAS: "",
   CATEGORIA: "ELECTRICIDAD",
   PROVEEDOR_PRINCIPAL: "DON HERRAMIENTAS SA",
@@ -432,8 +548,10 @@ export const PRODUCTOS_TEMPLATE_ROW = {
   PRECIO_VENTA: 15000,
   STOCK_ACTUAL: 10,
   STOCK_MINIMO: 2,
+  CANTIDAD_MINIMA_MINORISTA: 1,
   METODO_VALUACION: "CPP",
   ACTIVO: "SI",
+  ACORDES_PRINCIPALES: "Cítrico, Amaderado, Fresco",
 };
 // Util para detectar uso por linter
 export const _unused = normalizeUpperNullable;

@@ -380,7 +380,12 @@ export function CatalogoWebFields({ value, onChange, nombre, precioVenta, marcas
       {/* Descripciones */}
       <div className="grid grid-cols-1 gap-4 mb-4">
         <div>
-          <label className={labelClass}>Descripción corta (card)</label>
+          <label className={labelClass}>
+            Descripción corta (card){" "}
+            <span className="ml-1 text-[10px] uppercase tracking-wider bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-normal">
+              SKU descripción
+            </span>
+          </label>
           <input
             type="text"
             value={value.descripcion_corta}
@@ -389,6 +394,9 @@ export function CatalogoWebFields({ value, onChange, nombre, precioVenta, marcas
             className={inputClass}
             maxLength={200}
           />
+          <p className="text-xs text-slate-500 mt-1">
+            Corresponde a la columna <strong>SKU DESCRIPCION</strong> del Excel — descripción breve del perfume.
+          </p>
         </div>
         <div>
           <label className={labelClass}>Descripción larga (detalle)</label>

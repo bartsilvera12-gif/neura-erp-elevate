@@ -18,7 +18,8 @@ import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest
 import { syncCatalogoExtras } from "@/lib/inventario/server/catalogo-web-extras";
 
 const PRODUCTOS_COLS_PRIV =
-  "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "id,empresa_id,nombre,sku,modelo,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "cantidad_minima_minorista," +
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
@@ -102,12 +103,23 @@ export async function POST(request: NextRequest) {
     if (!nombre) return NextResponse.json(errorResponse("El nombre es obligatorio."), { status: 400 });
     if (!sku) return NextResponse.json(errorResponse("El SKU es obligatorio."), { status: 400 });
 
+    const modelo = typeof body.modelo === "string" ? body.modelo.trim().toUpperCase() || null : null;
     const codigoBarras = normalizeUpperCodigoBarras(body.codigo_barras);
     const codigoBarrasInterno = codigoBarras != null && body.codigo_barras_interno === true;
     const stockActual = Number(body.stock_actual ?? 0) || 0;
     const costoPromedio = Number(body.costo_promedio ?? 0) || 0;
     const stockMinimo = Number(body.stock_minimo ?? 0) || 0;
     const precioVenta = Number(body.precio_venta ?? 0) || 0;
+    // cantidad_minima_minorista: nullable, > 0 si presente
+    const cantMinMinRaw = Number(body.cantidad_minima_minorista);
+    const cantidadMinimaMinorista =
+      body.cantidad_minima_minorista == null || body.cantidad_minima_minorista === ""
+        ? null
+        : Number.isFinite(cantMinMinRaw) && cantMinMinRaw >= 1
+          ? Math.floor(cantMinMinRaw)
+          : null;
+    // activo: default true al crear (queda dado de alta).
+    const activo = body.activo === false ? false : true;
     const unidadMedida = normalizeUpperText(body.unidad_medida) || "UNIDAD";
     const metodoValuacion =
       body.metodo_valuacion === "FIFO" || body.metodo_valuacion === "LIFO"
@@ -189,12 +201,15 @@ export async function POST(request: NextRequest) {
       const row = await insertProductoPostgrest(jwt, empresaId, {
         nombre,
         sku,
+        modelo,
         costo_promedio: costoPromedio,
         precio_venta: precioVenta,
         stock_actual: stockActual,
         stock_minimo: stockMinimo,
+        cantidad_minima_minorista: cantidadMinimaMinorista,
         unidad_medida: unidadMedida,
         metodo_valuacion: metodoValuacion,
+        activo,
         codigo_barras: codigoBarras,
         codigo_barras_interno: codigoBarrasInterno,
         categoria_principal_id: categoriaPrincipalId,

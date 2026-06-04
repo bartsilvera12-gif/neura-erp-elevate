@@ -15,10 +15,12 @@ interface ProductoRow {
   empresa_id: string;
   nombre: string;
   sku: string;
+  modelo?: string | null;
   costo_promedio: number;
   precio_venta: number;
   stock_actual: number;
   stock_minimo: number;
+  cantidad_minima_minorista?: number | null;
   unidad_medida: string;
   metodo_valuacion: string;
   activo: boolean;
@@ -89,10 +91,14 @@ function rowToProducto(row: ProductoRow): Producto {
     id: row.id,
     nombre: row.nombre,
     sku: row.sku,
+    modelo: row.modelo ?? null,
+    activo: row.activo !== false,
     costo_promedio: Number(row.costo_promedio),
     precio_venta: Number(row.precio_venta),
     stock_actual: Number(row.stock_actual),
     stock_minimo: Number(row.stock_minimo),
+    cantidad_minima_minorista:
+      row.cantidad_minima_minorista == null ? null : Number(row.cantidad_minima_minorista),
     unidad_medida: row.unidad_medida,
     metodo_valuacion: row.metodo_valuacion as MetodoValuacion,
     codigo_barras: row.codigo_barras ?? null,
@@ -227,12 +233,15 @@ export async function saveProducto(
   const body: Record<string, unknown> = {
     nombre: datos.nombre,
     sku: datos.sku,
+    modelo: datos.modelo ?? null,
     costo_promedio: datos.costo_promedio,
     precio_venta: datos.precio_venta,
     stock_actual: datos.stock_actual ?? 0,
     stock_minimo: datos.stock_minimo ?? 0,
+    cantidad_minima_minorista: datos.cantidad_minima_minorista ?? null,
     unidad_medida: datos.unidad_medida || "Unidad",
     metodo_valuacion: datos.metodo_valuacion,
+    activo: datos.activo === false ? false : true,
     codigo_barras:
       datos.codigo_barras !== undefined && datos.codigo_barras !== null && datos.codigo_barras !== ""
         ? datos.codigo_barras
@@ -299,10 +308,14 @@ export async function updateProducto(
   const body: Record<string, unknown> = {};
   if (datos.nombre !== undefined) body.nombre = datos.nombre;
   if (datos.sku !== undefined) body.sku = datos.sku;
+  if (datos.modelo !== undefined) body.modelo = datos.modelo ?? null;
+  if (datos.activo !== undefined) body.activo = datos.activo === true;
   if (datos.costo_promedio !== undefined) body.costo_promedio = datos.costo_promedio;
   if (datos.precio_venta !== undefined) body.precio_venta = datos.precio_venta;
   if (datos.stock_actual !== undefined) body.stock_actual = datos.stock_actual;
   if (datos.stock_minimo !== undefined) body.stock_minimo = datos.stock_minimo;
+  if (datos.cantidad_minima_minorista !== undefined)
+    body.cantidad_minima_minorista = datos.cantidad_minima_minorista ?? null;
   if (datos.unidad_medida !== undefined) body.unidad_medida = datos.unidad_medida;
   if (datos.metodo_valuacion !== undefined) body.metodo_valuacion = datos.metodo_valuacion;
   if (datos.codigo_barras !== undefined) body.codigo_barras = datos.codigo_barras ?? null;

@@ -16,10 +16,16 @@ export interface Producto {
   id: string;
   nombre: string;
   sku: string;
+  /** Modelo del perfume (ej. Sauvage). Mapea a "SKU PRODUCT" del Excel. */
+  modelo?: string | null;
+  /** Si false, el producto queda dado de baja (no se lista en ventas). */
+  activo?: boolean;
   costo_promedio: number;
   precio_venta: number;
   stock_actual: number;
   stock_minimo: number;
+  /** Cantidad mínima sugerida para venta minorista (informativo). */
+  cantidad_minima_minorista?: number | null;
   unidad_medida: string;
   metodo_valuacion: MetodoValuacion;
   codigo_barras?: string | null;

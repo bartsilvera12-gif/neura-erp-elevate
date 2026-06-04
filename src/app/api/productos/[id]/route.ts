@@ -16,7 +16,8 @@ import { postgrestGet, getAccessTokenForRequest } from "@/lib/supabase/postgrest
 import { syncCatalogoExtras } from "@/lib/inventario/server/catalogo-web-extras";
 
 const PRODUCTO_COLS_PRIV =
-  "id,empresa_id,nombre,sku,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "id,empresa_id,nombre,sku,modelo,costo_promedio,precio_venta,stock_actual,stock_minimo," +
+  "cantidad_minima_minorista," +
   "unidad_medida,metodo_valuacion,activo,created_at,updated_at," +
   "codigo_barras,codigo_barras_interno,imagen_path,imagen_url," +
   "categoria_principal_id,ubicacion_principal_id,proveedor_principal_id," +
@@ -122,11 +123,24 @@ export async function PATCH(
     const patch: Parameters<typeof updateProductoPostgrest>[3] = {};
     if (body.nombre !== undefined) patch.nombre = normalizeUpperText(body.nombre);
     if (body.sku !== undefined) patch.sku = normalizeUpperText(body.sku);
+    if (body.modelo !== undefined) {
+      patch.modelo = typeof body.modelo === "string" ? body.modelo.trim().toUpperCase() || null : null;
+    }
     if (body.costo_promedio !== undefined) patch.costo_promedio = Number(body.costo_promedio) || 0;
     if (body.precio_venta !== undefined) patch.precio_venta = Number(body.precio_venta) || 0;
     if (body.stock_actual !== undefined) patch.stock_actual = Number(body.stock_actual) || 0;
     if (body.stock_minimo !== undefined) patch.stock_minimo = Number(body.stock_minimo) || 0;
+    if (body.cantidad_minima_minorista !== undefined) {
+      const v = body.cantidad_minima_minorista;
+      if (v === null || v === "") patch.cantidad_minima_minorista = null;
+      else {
+        const n = Number(v);
+        patch.cantidad_minima_minorista =
+          Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+      }
+    }
     if (body.unidad_medida !== undefined) patch.unidad_medida = normalizeUpperText(body.unidad_medida) || "UNIDAD";
+    if (body.activo !== undefined) patch.activo = body.activo === true;
     if (body.metodo_valuacion !== undefined) {
       const mv = body.metodo_valuacion;
       patch.metodo_valuacion = mv === "FIFO" || mv === "LIFO" ? mv : "CPP";
