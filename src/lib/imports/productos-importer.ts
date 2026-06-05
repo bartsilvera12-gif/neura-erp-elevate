@@ -32,15 +32,58 @@ export interface ProductoParsed {
   stock_actual: number;
   stock_minimo: number;
   cantidad_minima_minorista: number | null;
+  precio_mayorista: number | null;
+  cantidad_minima_mayorista: number | null;
+  genero: "masculino" | "femenino" | "unisex" | null;
+  volumen_ml: number | null;
+  concentracion: string | null;
+  es_decant: boolean;
   metodo_valuacion: "CPP" | "FIFO" | "LIFO";
   activo: boolean;
   acordes: string[];
+  familia_olfativa: string;
+  notas_salida: string[];
+  notas_corazon: string[];
+  notas_fondo: string[];
   errors: string[];
   warnings: string[];
   match_id?: string | null;
+  marca_id?: string | null;
 }
 
 const METODOS = new Set(["CPP", "FIFO", "LIFO"]);
+
+/** Mapea valores libres de género a los 3 enums aceptados por la DB. */
+function mapGenero(raw: string): "masculino" | "femenino" | "unisex" | null {
+  const v = raw.trim().toLowerCase();
+  if (!v) return null;
+  if (["mujer", "femenino", "f", "woman", "women", "fem"].includes(v)) return "femenino";
+  if (["hombre", "varon", "masculino", "m", "man", "men", "masc"].includes(v)) return "masculino";
+  if (["unisex", "u", "x", "ambos"].includes(v)) return "unisex";
+  return null;
+}
+
+/** Devuelve el valor del primer header del row cuyo nombre normalizado
+ *  empiece con alguno de los prefijos. Útil para headers largos del Excel
+ *  legacy tipo "Familia olfativa (NO OBLIGATORIO CARGAR)". */
+function pickByPrefix(row: Record<string, string>, ...prefixes: string[]): string {
+  for (const k of Object.keys(row)) {
+    for (const p of prefixes) {
+      if (k.startsWith(p)) {
+        const v = row[k];
+        if (v != null && String(v).trim() !== "") return String(v).trim();
+      }
+    }
+  }
+  return "";
+}
+
+function splitCsv(raw: string): string[] {
+  return raw
+    .split(/[,;]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
 
 export function parseProductosRows(rows: Record<string, string>[]): ProductoParsed[] {
   return rows.map((r, idx) => {
@@ -76,18 +119,72 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
     const cantMinMinRaw = pickNumber(
       r,
       "CANTIDAD_MINIMA_MINORISTA",
-      "CANTIDAD MINIMA MINORISTA",
-      "CANTIDAD_MINIMA_V_MINORISTA"
+      "CANTIDAD_MINIMA_VENTA_MINORISTA",
+      "CANTIDAD_MINIMA_V_MINORISTA",
+      "CANTIDAD MINIMA MINORISTA"
     );
     const cantidad_minima_minorista =
       Number.isFinite(cantMinMinRaw) && cantMinMinRaw >= 1
         ? Math.floor(cantMinMinRaw)
         : null;
+    // Precio mayorista (informativo). Solo se setea si vino > 0.
+    const precioMayoristaRaw = pickNumber(
+      r,
+      "PRECIO_MAYORISTA",
+      "PRECIO_VENTA_MAYORISTA",
+      "PRECIO_VENTA MAYORISTA"
+    );
+    const precio_mayorista = precioMayoristaRaw > 0 ? precioMayoristaRaw : null;
+    const cantMinMayRaw = pickNumber(
+      r,
+      "CANTIDAD_MINIMA_MAYORISTA",
+      "CANTIDAD_MINIMA_VENTA_MAYORISTA",
+      "CANTIDAD MINIMA MAYORISTA"
+    );
+    const cantidad_minima_mayorista =
+      Number.isFinite(cantMinMayRaw) && cantMinMayRaw >= 1
+        ? Math.floor(cantMinMayRaw)
+        : null;
+    // Precio de venta: soporto alias "MINORISTA" para planillas legacy.
+    const precio_venta = pickNumber(
+      r,
+      "PRECIO_VENTA",
+      "PRECIO_VENTA_MINORISTA",
+      "PRECIO_MINORISTA",
+      "PRECIO_VENTA MINORISTA"
+    );
     const acordesCsv = pick(r, "ACORDES_PRINCIPALES", "ACORDES", "ACORDES PRINCIPALES", "ACORDES_OLFATIVOS");
-    const acordes = acordesCsv
-      .split(/[,;]/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    const acordes = splitCsv(acordesCsv);
+    // Género: mapeo libre → enum DB.
+    const generoRaw = pick(r, "GENERO", "GENDER", "SEXO");
+    const genero = mapGenero(generoRaw);
+    if (generoRaw && !genero) {
+      warnings.push(`GENERO "${generoRaw}" no reconocido (esperado: MUJER, HOMBRE, UNISEX).`);
+    }
+    // Volumen en ml.
+    const volRaw = pickNumber(r, "VOLUMEN_ML", "PRESENTACION_ML", "PRESENTACION ML", "ML");
+    const volumen_ml = volRaw > 0 ? Math.floor(volRaw) : null;
+    const concentracion = normalizeUpperText(pick(r, "CONCENTRACION", "CONCENTRACIÓN")) || null;
+    // Tipo de presentación: si contiene "DECANT" lo marcamos es_decant.
+    const tipoPresentacion = normalizeUpperText(
+      pick(r, "TIPO_PRESENTACION", "TIPO_DE_PRESENTACION", "TIPO DE PRESENTACION")
+    );
+    const es_decant = /DECANT/.test(tipoPresentacion);
+    // Familia + notas olfativas. Soporto el header largo legacy via prefijo.
+    const familia_olfativa = pick(r, "FAMILIA_OLFATIVA")
+      || pickByPrefix(r, "FAMILIA_OLFATIVA");
+    const notas_salida = splitCsv(
+      pick(r, "NOTAS_SALIDA", "NOTAS_DE_SALIDA")
+        || pickByPrefix(r, "NOTAS_DE_SALIDA", "NOTAS_SALIDA")
+    );
+    const notas_corazon = splitCsv(
+      pick(r, "NOTAS_CORAZON", "NOTAS_DE_CORAZON")
+        || pickByPrefix(r, "NOTAS_DE_CORAZON", "NOTAS_CORAZON")
+    );
+    const notas_fondo = splitCsv(
+      pick(r, "NOTAS_FONDO", "NOTAS_DE_FONDO")
+        || pickByPrefix(r, "NOTAS_DE_FONDO", "NOTAS_FONDO")
+    );
     return {
       row_number: idx + 2,
       nombre,
@@ -101,13 +198,23 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
       ubicacion_nombre: normalizeUpperText(pick(r, "UBICACION_PRINCIPAL", "UBICACION")),
       unidad_medida: normalizeUpperText(pick(r, "UNIDAD_MEDIDA", "UNIDADMEDIDA")) || "UNIDAD",
       costo_promedio: pickNumber(r, "COSTO_PROMEDIO"),
-      precio_venta: pickNumber(r, "PRECIO_VENTA"),
+      precio_venta,
       stock_actual: pickNumber(r, "STOCK_ACTUAL"),
       stock_minimo: pickNumber(r, "STOCK_MINIMO"),
       cantidad_minima_minorista,
+      precio_mayorista,
+      cantidad_minima_mayorista,
+      genero,
+      volumen_ml,
+      concentracion,
+      es_decant,
       metodo_valuacion,
       activo: pickBool(r, "ACTIVO"),
       acordes,
+      familia_olfativa,
+      notas_salida,
+      notas_corazon,
+      notas_fondo,
       errors,
       warnings,
     };
@@ -121,6 +228,7 @@ export interface ResolverMaps {
   proveedoresByName: Map<string, string>;
   ubicacionesByName: Map<string, string>;
   ubicacionesByCodigo: Map<string, string>;
+  marcasByName: Map<string, string>;
 }
 
 export async function buildResolverMaps(schemaRaw: string, empresaId: string): Promise<ResolverMaps> {
@@ -131,12 +239,14 @@ export async function buildResolverMaps(schemaRaw: string, empresaId: string): P
   const tC = quoteSchemaTable(schema, "categorias_productos");
   const tPr = quoteSchemaTable(schema, "proveedores");
   const tU = quoteSchemaTable(schema, "inventario_ubicaciones");
+  const tMar = quoteSchemaTable(schema, "marcas");
 
-  const [prods, cats, provs, ubis] = await Promise.all([
+  const [prods, cats, provs, ubis, marcas] = await Promise.all([
     pool.query<ProductoExistente>(`SELECT id, sku, codigo_barras, stock_actual FROM ${tP} WHERE empresa_id=$1::uuid`, [empresaId]),
     pool.query<{ id: string; nombre: string }>(`SELECT id, nombre FROM ${tC} WHERE empresa_id=$1::uuid AND activo=true`, [empresaId]),
     pool.query<{ id: string; nombre: string }>(`SELECT id, nombre FROM ${tPr} WHERE empresa_id=$1::uuid`, [empresaId]),
     pool.query<{ id: string; nombre: string; codigo: string | null }>(`SELECT id, nombre, codigo FROM ${tU} WHERE empresa_id=$1::uuid AND activo=true`, [empresaId]),
+    pool.query<{ id: string; nombre: string }>(`SELECT id, nombre FROM ${tMar} WHERE empresa_id=$1::uuid AND activo=true`, [empresaId]),
   ]);
 
   const productosBySku = new Map<string, ProductoExistente>();
@@ -156,13 +266,16 @@ export async function buildResolverMaps(schemaRaw: string, empresaId: string): P
     ubicacionesByName.set(u.nombre.trim().toUpperCase(), u.id);
     if (u.codigo) ubicacionesByCodigo.set(u.codigo.trim().toUpperCase(), u.id);
   }
-  return { productosBySku, productosByCodigo, categoriasByName, proveedoresByName, ubicacionesByName, ubicacionesByCodigo };
+  const marcasByName = new Map<string, string>();
+  for (const m of marcas.rows) marcasByName.set(m.nombre.trim().toUpperCase(), m.id);
+  return { productosBySku, productosByCodigo, categoriasByName, proveedoresByName, ubicacionesByName, ubicacionesByCodigo, marcasByName };
 }
 
 export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): PreviewResponse {
   const catsFaltantes = new Set<string>();
   const provsFaltantes = new Set<string>();
   const ubisFaltantes = new Set<string>();
+  const marcasFaltantes = new Set<string>();
   let insertar = 0, actualizar = 0, errores = 0, warnings = 0;
   let totalEntrada = 0, totalSalida = 0, movimientosGenerar = 0;
   const omitir = 0;
@@ -200,6 +313,17 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
     if (p.ubicacion_nombre && !maps.ubicacionesByName.has(p.ubicacion_nombre) && !maps.ubicacionesByCodigo.has(p.ubicacion_nombre)) {
       p.warnings.push(`Ubicación "${p.ubicacion_nombre}" no existe.`);
       ubisFaltantes.add(p.ubicacion_nombre);
+    }
+    // Marca: resuelve a marca_id (FK). Si no existe la marcamos como faltante
+    // para que el flujo "crear faltantes" la cree en commit.
+    if (p.marca) {
+      const mid = maps.marcasByName.get(p.marca);
+      if (mid) {
+        p.marca_id = mid;
+      } else {
+        p.warnings.push(`Marca "${p.marca}" no existe (se creará si tildás "crear faltantes").`);
+        marcasFaltantes.add(p.marca);
+      }
     }
 
     const hasErr = p.errors.length > 0;
@@ -252,13 +376,14 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
         categorias: [...catsFaltantes],
         proveedores: [...provsFaltantes],
         ubicaciones: [...ubisFaltantes],
+        marcas: [...marcasFaltantes],
       },
       movimientos_a_generar: movimientosGenerar,
       unidades_entrada: totalEntrada,
       unidades_salida: totalSalida,
     },
     rows,
-    headers: ["NOMBRE","SKU","MODELO","SKU_DESCRIPCION","MARCA","CODIGO_BARRAS","CATEGORIA","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","STOCK_ACTUAL","STOCK_MINIMO","CANTIDAD_MINIMA_MINORISTA","METODO_VALUACION","ACTIVO","ACORDES_PRINCIPALES"],
+    headers: ["NOMBRE","SKU","CODIGO_BARRAS","MARCA","SKU PRODUCT","SKU DESCRIPCION","CATEGORIA","GENERO","VOLUMEN_ML","CONCENTRACION","TIPO_PRESENTACION","PROVEEDOR_PRINCIPAL","UBICACION_PRINCIPAL","UNIDAD_MEDIDA","COSTO_PROMEDIO","PRECIO_VENTA","CANTIDAD_MINIMA_MINORISTA","PRECIO_VENTA_MAYORISTA","CANTIDAD_MINIMA_MAYORISTA","STOCK_ACTUAL","STOCK_MINIMO","METODO_VALUACION","ACTIVO","ACORDES_PRINCIPALES","FAMILIA_OLFATIVA","NOTAS_SALIDA","NOTAS_CORAZON","NOTAS_FONDO"],
   };
 }
 
@@ -300,6 +425,10 @@ export async function commitProductos(
   const tM = quoteSchemaTable(schema, "movimientos_inventario");
   const tA = quoteSchemaTable(schema, "acordes_olfativos");
   const tPA = quoteSchemaTable(schema, "producto_acordes");
+  const tMar = quoteSchemaTable(schema, "marcas");
+  const tFO = quoteSchemaTable(schema, "familias_olfativas");
+  const tNO = quoteSchemaTable(schema, "notas_olfativas");
+  const tPN = quoteSchemaTable(schema, "producto_notas");
   const tSec = `"${schema.replace(/"/g, '""')}".incrementar_secuencia_producto`;
   const fnSkuGen = `"${schema.replace(/"/g, '""')}".generar_sku_producto`;
   const refImport = `IMPORT_EXCEL:${(ctx.filename ?? "").slice(0, 80)}`;
@@ -338,15 +467,17 @@ export async function commitProductos(
     }
   }
 
-  // Crear faltantes (categorias/proveedores/ubicaciones) si corresponde
+  // Crear faltantes (categorias/proveedores/ubicaciones/marcas) si corresponde
   if (crearFaltantes) {
     const cats = new Set<string>();
     const provs = new Set<string>();
     const ubis = new Set<string>();
+    const marcasNew = new Set<string>();
     for (const p of parsed) {
       if (p.categoria_nombre && !maps.categoriasByName.has(p.categoria_nombre)) cats.add(p.categoria_nombre);
       if (p.proveedor_nombre && !maps.proveedoresByName.has(p.proveedor_nombre)) provs.add(p.proveedor_nombre);
       if (p.ubicacion_nombre && !maps.ubicacionesByName.has(p.ubicacion_nombre) && !maps.ubicacionesByCodigo.has(p.ubicacion_nombre)) ubis.add(p.ubicacion_nombre);
+      if (p.marca && !maps.marcasByName.has(p.marca)) marcasNew.add(p.marca);
     }
     for (const nombre of cats) {
       try {
@@ -368,6 +499,26 @@ export async function commitProductos(
         maps.ubicacionesByName.set(nombre, r.rows[0].id);
         out.warningMessages.push(`Ubicación creada: ${nombre} (tipo: otro)`);
       } catch (e) { out.errorMessages.push(`No se pudo crear ubicación ${nombre}: ${(e as Error).message}`); }
+    }
+    for (const nombre of marcasNew) {
+      try {
+        const slug = slugifyMarca(nombre);
+        const r = await pool.query<{ id: string }>(
+          `INSERT INTO ${tMar} (empresa_id, nombre, slug_web, visible_web, orden_web, activo)
+           VALUES ($1::uuid, $2, $3, true, 0, true)
+           RETURNING id`,
+          [empresaId, nombre, slug]
+        );
+        maps.marcasByName.set(nombre, r.rows[0].id);
+        out.warningMessages.push(`Marca creada: ${nombre}`);
+      } catch (e) { out.errorMessages.push(`No se pudo crear marca ${nombre}: ${(e as Error).message}`); }
+    }
+    // Refrescar marca_id en las filas parseadas que dependían del create.
+    for (const p of parsed) {
+      if (p.marca && !p.marca_id) {
+        const mid = maps.marcasByName.get(p.marca);
+        if (mid) p.marca_id = mid;
+      }
     }
   }
 
@@ -399,12 +550,21 @@ export async function commitProductos(
                categoria_principal_id=$13::uuid, proveedor_principal_id=$14::uuid, ubicacion_principal_id=$15::uuid,
                marca=NULLIF($18,''),
                descripcion_corta=NULLIF($19,''),
+               marca_id=$20::uuid,
+               genero=$21,
+               volumen_ml=$22::int,
+               concentracion=NULLIF($23,''),
+               precio_mayorista=$24::numeric,
+               cantidad_minima_mayorista=$25::int,
+               es_decant=$26::boolean,
                updated_at=now()
              WHERE id=$16::uuid AND empresa_id=$17::uuid`,
             [p.nombre, p.sku, p.modelo, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
              p.stock_actual, p.stock_minimo, p.cantidad_minima_minorista, p.metodo_valuacion, p.activo,
              categoriaId, proveedorId, ubicacionId, p.match_id, empresaId,
-             p.marca, p.descripcion_corta]
+             p.marca, p.descripcion_corta,
+             p.marca_id ?? null, p.genero, p.volumen_ml, p.concentracion,
+             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant]
           );
           out.updated++;
           // Sincronizar acordes (reemplazar selección).
@@ -413,6 +573,19 @@ export async function commitProductos(
               await syncAcordesPorNombre(pool, tA, tPA, empresaId, p.match_id, p.acordes);
             } catch (e) {
               out.warningMessages.push(`Fila ${p.row_number}: acordes no sincronizados (${(e as Error).message.slice(0, 100)})`);
+            }
+          }
+          // Sincronizar familia olfativa + notas (top/heart/base).
+          if (p.familia_olfativa || p.notas_salida.length || p.notas_corazon.length || p.notas_fondo.length) {
+            try {
+              await syncFamiliaYNotas(pool, tFO, tNO, tPN, tP, empresaId, p.match_id, {
+                familia_nombre: p.familia_olfativa || null,
+                notas_top: p.notas_salida,
+                notas_heart: p.notas_corazon,
+                notas_base: p.notas_fondo,
+              });
+            } catch (e) {
+              out.warningMessages.push(`Fila ${p.row_number}: familia/notas no sincronizadas (${(e as Error).message.slice(0, 100)})`);
             }
           }
           // Movimiento por delta (ajuste_manual + ENTRADA/SALIDA segun signo)
@@ -469,19 +642,25 @@ export async function commitProductos(
                unidad_medida, costo_promedio, precio_venta, stock_actual, stock_minimo,
                cantidad_minima_minorista,
                metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id,
-               marca, descripcion_corta
+               marca, descripcion_corta,
+               marca_id, genero, volumen_ml, concentracion,
+               precio_mayorista, cantidad_minima_mayorista, es_decant
              ) VALUES (
                $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), $6::boolean,
                $7, $8::numeric, $9::numeric, $10::numeric, $11::numeric,
                $12::int,
                $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid,
-               NULLIF($18,''), NULLIF($19,'')
+               NULLIF($18,''), NULLIF($19,''),
+               $20::uuid, $21, $22::int, NULLIF($23,''),
+               $24::numeric, $25::int, $26::boolean
              ) RETURNING id`,
             [empresaId, p.nombre, skuFinal, p.modelo, codigoBarras, codigoInterno,
              p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
              p.cantidad_minima_minorista,
              p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId,
-             p.marca, p.descripcion_corta]
+             p.marca, p.descripcion_corta,
+             p.marca_id ?? null, p.genero, p.volumen_ml, p.concentracion,
+             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant]
           );
           out.inserted++;
           // Sincronizar acordes para producto nuevo.
@@ -490,6 +669,20 @@ export async function commitProductos(
               await syncAcordesPorNombre(pool, tA, tPA, empresaId, inserted.rows[0].id, p.acordes);
             } catch (e) {
               out.warningMessages.push(`Fila ${p.row_number}: acordes no sincronizados (${(e as Error).message.slice(0, 100)})`);
+            }
+          }
+          // Sincronizar familia olfativa + notas para producto nuevo.
+          if (inserted.rows[0]?.id &&
+              (p.familia_olfativa || p.notas_salida.length || p.notas_corazon.length || p.notas_fondo.length)) {
+            try {
+              await syncFamiliaYNotas(pool, tFO, tNO, tPN, tP, empresaId, inserted.rows[0].id, {
+                familia_nombre: p.familia_olfativa || null,
+                notas_top: p.notas_salida,
+                notas_heart: p.notas_corazon,
+                notas_base: p.notas_fondo,
+              });
+            } catch (e) {
+              out.warningMessages.push(`Fila ${p.row_number}: familia/notas no sincronizadas (${(e as Error).message.slice(0, 100)})`);
             }
           }
           // Movimiento de inventario inicial si stock > 0
@@ -587,26 +780,145 @@ async function syncAcordesPorNombre(
   }
 }
 
+function slugifyMarca(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+/**
+ * Sincroniza familia olfativa + notas (top/heart/base) de un producto.
+ * Find-or-create por nombre en familias_olfativas y notas_olfativas. Reemplaza
+ * la selección de producto_notas por posición.
+ */
+async function syncFamiliaYNotas(
+  pool: Pool,
+  tFO: string,
+  tNO: string,
+  tPN: string,
+  tP: string,
+  empresaId: string,
+  productoId: string,
+  data: {
+    familia_nombre: string | null;
+    notas_top: string[];
+    notas_heart: string[];
+    notas_base: string[];
+  }
+): Promise<void> {
+  // 1) Familia olfativa → setea productos.familia_olfativa_id
+  if (data.familia_nombre && data.familia_nombre.trim()) {
+    const nombre = data.familia_nombre.trim();
+    const found = await pool.query<{ id: string }>(
+      `SELECT id FROM ${tFO}
+       WHERE empresa_id=$1::uuid AND lower(btrim(nombre)) = lower(btrim($2))
+       LIMIT 1`,
+      [empresaId, nombre]
+    );
+    let familiaId = found.rows[0]?.id ?? null;
+    if (!familiaId) {
+      const ins = await pool.query<{ id: string }>(
+        `INSERT INTO ${tFO} (empresa_id, nombre, activo)
+         VALUES ($1::uuid, $2, true) RETURNING id`,
+        [empresaId, nombre]
+      );
+      familiaId = ins.rows[0]?.id ?? null;
+    }
+    if (familiaId) {
+      await pool.query(
+        `UPDATE ${tP} SET familia_olfativa_id=$1::uuid WHERE id=$2::uuid AND empresa_id=$3::uuid`,
+        [familiaId, productoId, empresaId]
+      );
+    }
+  }
+
+  // 2) Notas (top/heart/base): borra las existentes para cada posición y reinserta.
+  const posiciones: Array<{ pos: "top" | "heart" | "base"; nombres: string[] }> = [
+    { pos: "top", nombres: data.notas_top },
+    { pos: "heart", nombres: data.notas_heart },
+    { pos: "base", nombres: data.notas_base },
+  ];
+  for (const { pos, nombres } of posiciones) {
+    if (nombres.length === 0) continue;
+    // Deduplicar nombres case-insensitive preservando orden.
+    const vistos = new Set<string>();
+    const limpios: string[] = [];
+    for (const raw of nombres) {
+      const v = raw.trim();
+      if (!v) continue;
+      const k = v.toLowerCase();
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      limpios.push(v);
+    }
+    await pool.query(
+      `DELETE FROM ${tPN} WHERE producto_id=$1::uuid AND posicion=$2`,
+      [productoId, pos]
+    );
+    let orden = 1;
+    for (const nombre of limpios) {
+      if (!nombre) continue;
+      const found = await pool.query<{ id: string }>(
+        `SELECT id FROM ${tNO}
+         WHERE empresa_id=$1::uuid AND lower(btrim(nombre)) = lower(btrim($2))
+         LIMIT 1`,
+        [empresaId, nombre]
+      );
+      let notaId = found.rows[0]?.id ?? null;
+      if (!notaId) {
+        const ins = await pool.query<{ id: string }>(
+          `INSERT INTO ${tNO} (empresa_id, nombre, activo)
+           VALUES ($1::uuid, $2, true) RETURNING id`,
+          [empresaId, nombre]
+        );
+        notaId = ins.rows[0]?.id ?? null;
+      }
+      if (notaId) {
+        await pool.query(
+          `INSERT INTO ${tPN} (producto_id, nota_id, posicion, orden)
+           VALUES ($1::uuid, $2::uuid, $3, $4::int)`,
+          [productoId, notaId, pos, orden]
+        );
+        orden++;
+      }
+    }
+  }
+}
+
 /** Helper sin uso directo aqui pero util al exponer en templates */
 export const PRODUCTOS_TEMPLATE_ROW = {
-  NOMBRE: "EJEMPLO PRODUCTO",
-  SKU: "EJ-001",
-  MODELO: "SAUVAGE",
-  SKU_DESCRIPCION: "EAU DE PARFUM 100ML",
-  MARCA: "DIOR",
+  NOMBRE: "",
+  SKU: "",
   CODIGO_BARRAS: "",
-  CATEGORIA: "ELECTRICIDAD",
-  PROVEEDOR_PRINCIPAL: "DON HERRAMIENTAS SA",
+  MARCA: "DIOR",
+  "SKU PRODUCT": "SAUVAGE EDP",
+  "SKU DESCRIPCION": "EAU DE PARFUM",
+  CATEGORIA: "PERFUMERIA",
+  GENERO: "HOMBRE",
+  VOLUMEN_ML: 100,
+  CONCENTRACION: "EDP",
+  TIPO_PRESENTACION: "CAJA NORMAL",
+  PROVEEDOR_PRINCIPAL: "PROVEEDOR DEMO",
   UBICACION_PRINCIPAL: "DEPOSITO CENTRAL",
   UNIDAD_MEDIDA: "UNIDAD",
   COSTO_PROMEDIO: 10000,
   PRECIO_VENTA: 15000,
+  CANTIDAD_MINIMA_MINORISTA: 1,
+  PRECIO_VENTA_MAYORISTA: 12000,
+  CANTIDAD_MINIMA_MAYORISTA: 3,
   STOCK_ACTUAL: 10,
   STOCK_MINIMO: 2,
-  CANTIDAD_MINIMA_MINORISTA: 1,
   METODO_VALUACION: "CPP",
   ACTIVO: "SI",
   ACORDES_PRINCIPALES: "Cítrico, Amaderado, Fresco",
+  FAMILIA_OLFATIVA: "Aromática Fougère",
+  NOTAS_SALIDA: "bergamota, pimienta",
+  NOTAS_CORAZON: "lavanda, ambroxan",
+  NOTAS_FONDO: "vetiver, sándalo",
 };
 // Util para detectar uso por linter
 export const _unused = normalizeUpperNullable;
