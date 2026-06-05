@@ -53,13 +53,24 @@ export interface ProductoParsed {
 
 const METODOS = new Set(["CPP", "FIFO", "LIFO"]);
 
-/** Mapea valores libres de género a los 3 enums aceptados por la DB. */
+/** Mapea valores libres de género a los 3 enums aceptados por la DB.
+ *  Es tolerante: acepta plurales, acentos, mayúsculas/minúsculas, espacios
+ *  extra y prefijos parciales (ej: "MUJ", "Mujeres", "Hombres", "varón"). */
 function mapGenero(raw: string): "masculino" | "femenino" | "unisex" | null {
-  const v = raw.trim().toLowerCase();
+  const v = raw
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita diacríticos: varón→varon
+    .trim()
+    .toLowerCase();
   if (!v) return null;
-  if (["mujer", "femenino", "f", "woman", "women", "fem"].includes(v)) return "femenino";
-  if (["hombre", "varon", "masculino", "m", "man", "men", "masc"].includes(v)) return "masculino";
-  if (["unisex", "u", "x", "ambos"].includes(v)) return "unisex";
+  // 1) Exactos / aliases comunes.
+  if (["mujer", "mujeres", "femenino", "femenina", "f", "fem", "woman", "women"].includes(v)) return "femenino";
+  if (["hombre", "hombres", "varon", "varones", "masculino", "masculina", "m", "masc", "man", "men"].includes(v)) return "masculino";
+  if (["unisex", "u", "x", "ambos", "ambas", "todos", "todas"].includes(v)) return "unisex";
+  // 2) Fallback por prefijo — última red de seguridad para typos / variantes.
+  if (v.startsWith("muj") || v.startsWith("fem")) return "femenino";
+  if (v.startsWith("hom") || v.startsWith("var") || v.startsWith("masc")) return "masculino";
+  if (v.startsWith("uni")) return "unisex";
   return null;
 }
 
