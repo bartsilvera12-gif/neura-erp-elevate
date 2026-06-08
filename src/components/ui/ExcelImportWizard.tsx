@@ -221,12 +221,15 @@ function PreviewTable({ rows }: { rows: import("@/lib/excel/import-types").Previ
               r.action === "UPDATE" ? "bg-sky-100 text-sky-700" :
               r.action === "SKIP" ? "bg-amber-100 text-amber-700" :
               "bg-red-100 text-red-700";
-            const summary = Object.entries(r.data).slice(0, 3).map(([k, v]) => `${k}=${String(v).slice(0, 40)}`).join(" · ");
+            const summary = Object.entries(r.data)
+              .filter(([, v]) => v !== "" && v !== null && v !== undefined)
+              .map(([k, v]) => `${k}=${String(v).slice(0, 40)}`)
+              .join(" · ");
             return (
-              <tr key={r.row_number} className="border-t border-slate-100">
+              <tr key={r.row_number} className="border-t border-slate-100 align-top">
                 <td className="px-2 py-1 text-slate-500">{r.row_number}</td>
                 <td className="px-2 py-1"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${badge}`}>{r.action}</span></td>
-                <td className="px-2 py-1 text-slate-700 truncate max-w-md">{summary}</td>
+                <td className="px-2 py-1 text-slate-700 max-w-xl whitespace-normal break-words leading-relaxed">{summary}</td>
                 <td className="px-2 py-1 text-xs">
                   {r.errors.map((e, i) => <div key={`e${i}`} className="text-red-700">⚠ {e}</div>)}
                   {r.warnings.map((w, i) => <div key={`w${i}`} className="text-amber-700">• {w}</div>)}

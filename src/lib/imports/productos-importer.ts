@@ -5,7 +5,7 @@ import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-po
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
 import type { PreviewRow, PreviewResponse } from "@/lib/excel/import-types";
-import { pick, pickNumber, pickBool, chunked } from "./import-helpers";
+import { pick, pickNumber, pickBool, pickBoolNullable, chunked } from "./import-helpers";
 import type { Pool } from "pg";
 
 interface ProductoExistente {
@@ -40,6 +40,9 @@ export interface ProductoParsed {
   es_decant: boolean;
   metodo_valuacion: "CPP" | "FIFO" | "LIFO";
   activo: boolean;
+  /** null = celda vacía, no tocar el valor actual en DB.
+   *  true/false = setear explícito. */
+  visible_web: boolean | null;
   acordes: string[];
   familia_olfativa: string;
   notas_salida: string[];
@@ -350,6 +353,10 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
       es_decant,
       metodo_valuacion,
       activo: pickBool(r, "ACTIVO"),
+      visible_web: pickBoolNullable(
+        r, "VISIBLE_WEB", "VISIBLE_EN_LA_WEB", "VISIBLE_EN_WEB",
+        "MOSTRAR_EN_WEB", "MOSTRAR_WEB", "PUBLICAR_WEB", "PUBLICAR"
+      ),
       acordes,
       familia_olfativa,
       notas_salida,
@@ -534,6 +541,13 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       }
     }
 
+    // Resumen corto de notas (sólo primeras 3 por posición) para el preview.
+    const notasResumen = [
+      p.notas_salida.length ? `S:${p.notas_salida.slice(0, 3).join("/")}` : "",
+      p.notas_corazon.length ? `C:${p.notas_corazon.slice(0, 3).join("/")}` : "",
+      p.notas_fondo.length ? `F:${p.notas_fondo.slice(0, 3).join("/")}` : "",
+    ].filter(Boolean).join(" | ");
+
     return {
       row_number: p.row_number,
       action: action as "INSERT" | "UPDATE" | "ERROR" | "SKIP",
@@ -546,6 +560,14 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
         COSTO: p.costo_promedio, PRECIO: p.precio_venta, STOCK: p.stock_actual,
         STOCK_ANTERIOR: stockAnterior ?? "",
         MOVIMIENTO: stockMov,
+        // Campos rich — visibles en preview para confirmar que se cargan a DB
+        GENERO: p.genero ?? "",
+        VOLUMEN_ML: p.volumen_ml ?? "",
+        CONCENTRACION: p.concentracion ?? "",
+        FAMILIA: p.familia_olfativa || "",
+        NOTAS: notasResumen,
+        ACORDES: p.acordes.slice(0, 4).join("/"),
+        VISIBLE_WEB: p.visible_web == null ? "(no tocar)" : p.visible_web ? "SI" : "NO",
       },
     };
   });
@@ -739,6 +761,7 @@ export async function commitProductos(
                precio_mayorista=$24::numeric,
                cantidad_minima_mayorista=$25::int,
                es_decant=$26::boolean,
+               visible_web=COALESCE($27::boolean, visible_web),
                updated_at=now()
              WHERE id=$16::uuid AND empresa_id=$17::uuid`,
             [p.nombre, p.sku, p.modelo, p.codigo_barras, p.unidad_medida, p.costo_promedio, p.precio_venta,
@@ -746,7 +769,8 @@ export async function commitProductos(
              categoriaId, proveedorId, ubicacionId, p.match_id, empresaId,
              p.marca, p.descripcion_corta,
              p.marca_id ?? null, p.genero, p.volumen_ml, p.concentracion,
-             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant]
+             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant,
+             p.visible_web]
           );
           out.updated++;
           // Sincronizar acordes (reemplazar selección).
@@ -826,7 +850,8 @@ export async function commitProductos(
                metodo_valuacion, activo, categoria_principal_id, proveedor_principal_id, ubicacion_principal_id,
                marca, descripcion_corta,
                marca_id, genero, volumen_ml, concentracion,
-               precio_mayorista, cantidad_minima_mayorista, es_decant
+               precio_mayorista, cantidad_minima_mayorista, es_decant,
+               visible_web
              ) VALUES (
                $1::uuid, $2, NULLIF($3,''), NULLIF($4,''), NULLIF($5,''), $6::boolean,
                $7, $8::numeric, $9::numeric, $10::numeric, $11::numeric,
@@ -834,7 +859,8 @@ export async function commitProductos(
                $13, $14::boolean, $15::uuid, $16::uuid, $17::uuid,
                NULLIF($18,''), NULLIF($19,''),
                $20::uuid, $21, $22::int, NULLIF($23,''),
-               $24::numeric, $25::int, $26::boolean
+               $24::numeric, $25::int, $26::boolean,
+               COALESCE($27::boolean, false)
              ) RETURNING id`,
             [empresaId, p.nombre, skuFinal, p.modelo, codigoBarras, codigoInterno,
              p.unidad_medida, p.costo_promedio, p.precio_venta, p.stock_actual, p.stock_minimo,
@@ -842,7 +868,8 @@ export async function commitProductos(
              p.metodo_valuacion, p.activo, categoriaId, proveedorId, ubicacionId,
              p.marca, p.descripcion_corta,
              p.marca_id ?? null, p.genero, p.volumen_ml, p.concentracion,
-             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant]
+             p.precio_mayorista, p.cantidad_minima_mayorista, p.es_decant,
+             p.visible_web]
           );
           out.inserted++;
           // Sincronizar acordes para producto nuevo.

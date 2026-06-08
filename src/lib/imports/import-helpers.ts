@@ -88,3 +88,14 @@ export function pickBool(row: Record<string, string>, ...keys: string[]): boolea
   if (!raw) return true; // default activo=true
   return ["si", "sí", "true", "1", "yes", "y", "activo"].includes(raw);
 }
+
+/** Como pickBool pero distingue vacío (null) de explícito (true/false). Útil
+ *  para campos opcionales donde "vacío" debe respetar el valor actual de DB
+ *  en lugar de aplicar un default. */
+export function pickBoolNullable(row: Record<string, string>, ...keys: string[]): boolean | null {
+  const raw = pick(row, ...keys).toLowerCase();
+  if (!raw) return null;
+  if (["si", "sí", "true", "1", "yes", "y", "activo", "visible", "x", "✓"].includes(raw)) return true;
+  if (["no", "false", "0", "n", "off", "oculto", "inactivo"].includes(raw)) return false;
+  return null;
+}
