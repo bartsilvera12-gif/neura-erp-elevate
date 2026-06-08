@@ -5,6 +5,10 @@ import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-po
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
 import { CONCENTRACIONES } from "@/lib/inventario/concentraciones";
+import {
+  resolveImportedProductMetadata,
+  type MarcaCatalogo,
+} from "./import-metadata-resolver";
 import type { PreviewRow, PreviewResponse } from "@/lib/excel/import-types";
 import { pick, pickNumber, pickBool, pickBoolNullable, chunked } from "./import-helpers";
 import type { Pool } from "pg";
@@ -22,6 +26,9 @@ export interface ProductoParsed {
   nombre: string;
   sku: string;
   modelo: string;
+  /** Marca canónica (post-resolver) — normalmente coincide con
+   *  `marcas.nombre`. Si no hubo match contra catálogo se preserva el
+   *  texto crudo como legacy (sin marca_id). */
   marca: string;
   descripcion_corta: string;
   codigo_barras: string;
@@ -54,175 +61,20 @@ export interface ProductoParsed {
   warnings: string[];
   match_id?: string | null;
   marca_id?: string | null;
+  /** Crudos preservados del Excel para que buildPreview corra el resolver
+   *  con catálogo de marcas. parseProductosRows los completa pero no infiere. */
+  _raw_marca_column: string;
+  _raw_genero_column: string;
+  _raw_concentracion_column: string;
+  _raw_volumen_column: string;
 }
 
 const METODOS = new Set(["CPP", "FIFO", "LIFO"]);
 
-/** Mapea valores libres de género a los 3 enums aceptados por la DB.
- *  Es ultra-tolerante: acepta plurales, acentos, mayúsculas/minúsculas, espacios
- *  extra, prefijos parciales, ES/EN, y frases compuestas tipo "PARA HOMBRE",
- *  "FOR WOMEN", "LÍNEA MUJER", "POUR HOMME", "FOR HIM", etc. */
-const GENERO_FEM_TOKENS = new Set([
-  "mujer", "mujeres", "femenino", "femenina", "feminine", "f", "fem",
-  "woman", "women", "womens", "ladies", "lady", "girl", "girls",
-  "ella", "ellas", "her", "hers", "femme", "femmes", "donna", "donne",
-]);
-const GENERO_MASC_TOKENS = new Set([
-  "hombre", "hombres", "varon", "varones", "masculino", "masculina", "masculine",
-  "m", "masc", "man", "men", "mens", "gentleman", "gentlemen",
-  "boy", "boys", "ellos", "him", "his", "homme", "hommes", "uomo", "uomini",
-]);
-const GENERO_UNI_TOKENS = new Set([
-  "unisex", "u", "x", "ambos", "ambas", "todos", "todas",
-  "neutral", "neutro", "any", "all", "mixto", "mixta",
-]);
-function mapGenero(raw: string): "masculino" | "femenino" | "unisex" | null {
-  const v = raw
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // quita diacríticos: varón→varon
-    .trim()
-    .toLowerCase();
-  if (!v) return null;
-  // 1) Match exacto.
-  if (GENERO_FEM_TOKENS.has(v)) return "femenino";
-  if (GENERO_MASC_TOKENS.has(v)) return "masculino";
-  if (GENERO_UNI_TOKENS.has(v)) return "unisex";
-  // 2) Tokenización: capta "para hombre", "for women", "linea mujer", "pour homme".
-  const tokens = v.split(/[\s\-_,;.\/'"()]+/).filter(Boolean);
-  // Prioridad: si aparece "unisex" o "ambos" en cualquier parte, gana unisex.
-  if (tokens.some((t) => GENERO_UNI_TOKENS.has(t))) return "unisex";
-  const hayFem = tokens.some((t) => GENERO_FEM_TOKENS.has(t));
-  const hayMasc = tokens.some((t) => GENERO_MASC_TOKENS.has(t));
-  if (hayFem && hayMasc) return "unisex"; // "hombre y mujer" → unisex
-  if (hayFem) return "femenino";
-  if (hayMasc) return "masculino";
-  // 3) Fallback por prefijo (última red para typos).
-  if (v.startsWith("muj") || v.startsWith("fem")) return "femenino";
-  if (v.startsWith("hom") || v.startsWith("var") || v.startsWith("masc")) return "masculino";
-  if (v.startsWith("uni")) return "unisex";
-  return null;
-}
-
-/** Intenta inferir género desde texto libre (modelo/nombre/descripción) buscando
- *  marcadores típicos de perfumería: "pour homme", "for him", "for men", "para él",
- *  etc. Sólo devuelve un género si encuentra una señal clara — null si ambiguo. */
-function inferirGeneroDesdeTexto(text: string): "masculino" | "femenino" | "unisex" | null {
-  if (!text) return null;
-  const v = text
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-  const isFem = /\b(pour\s+femme|for\s+her|for\s+women|para\s+ella|para\s+mujer|de\s+mujer|woman|women|femme|donna|ladies)\b/.test(v);
-  const isMasc = /\b(pour\s+homme|for\s+him|for\s+men|para\s+el|para\s+hombre|de\s+hombre|homme|uomo|men's|gentleman)\b/.test(v);
-  const isUni = /\b(unisex|for\s+all|para\s+todos)\b/.test(v);
-  if (isUni) return "unisex";
-  if (isFem && isMasc) return "unisex";
-  if (isFem) return "femenino";
-  if (isMasc) return "masculino";
-  return null;
-}
-
-/** Extrae el volumen en ml de un valor de celda libre. Acepta números puros
- *  ("100", "100,5") y números con unidad ("100 ml", "100ML", "30 cc"). Bounds
- *  razonables (1..5000) para no aceptar años/IDs. */
-function parseMl(raw: string): number | null {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  // 1) Número con unidad ml/mL/cc.
-  const m1 = s.match(/(\d+(?:[.,]\d+)?)\s*(?:m\s*l|cc)\b/i);
-  if (m1) {
-    const n = Number(m1[1].replace(/\./g, "").replace(",", "."));
-    if (Number.isFinite(n) && n >= 1 && n <= 5000) return Math.floor(n);
-  }
-  // 2) Cell sólo número (formato AR "1.000,5" o EN "1000.5").
-  const onlyNum = s.replace(/\./g, "").replace(",", ".");
-  if (/^-?\d+(\.\d+)?$/.test(onlyNum)) {
-    const n = Number(onlyNum);
-    if (Number.isFinite(n) && n >= 1 && n <= 5000) return Math.floor(n);
-  }
-  return null;
-}
-
-/** Última red: extraer ml de campos descriptivos (MODELO, NOMBRE,
- *  SKU_DESCRIPCION). Requiere unidad explícita "ml"/"cc" para no confundir
- *  códigos/años con volumen. */
-function extractMlFromText(text: string): number | null {
-  if (!text) return null;
-  const m = String(text).match(/(\d+(?:[.,]\d+)?)\s*(?:m\s*l|cc)\b/i);
-  if (!m) return null;
-  const n = Number(m[1].replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(n) && n >= 1 && n <= 5000 ? Math.floor(n) : null;
-}
-
-/** Normaliza el valor crudo de CONCENTRACION al casing exacto del catálogo
- *  CONCENTRACIONES (ej: "EAU DE PARFUM" → "Eau de Parfum"). El form usa un
- *  `<select>` que compara value case-sensitive contra las opciones del catálogo;
- *  si guardábamos en mayúsculas, el dropdown se mostraba vacío aunque la DB
- *  tuviera el valor. Acepta aliases comunes (EDP/EDT/EDC) y para valores no
- *  reconocidos preserva el texto tal cual vino (queda como opción "Actual: …"
- *  en el form). Devuelve null si la celda está vacía. */
-function mapConcentracion(raw: string): string | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  const norm = trimmed
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-  // Match contra catálogo canónico (case/accents insensitive).
-  for (const c of CONCENTRACIONES) {
-    const cNorm = c
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      .toLowerCase();
-    if (cNorm === norm) return c;
-  }
-  // Aliases comunes.
-  const aliases: Record<string, string> = {
-    "edp": "Eau de Parfum",
-    "eau de parfum": "Eau de Parfum",
-    "edt": "Eau de Toilette",
-    "eau de toilette": "Eau de Toilette",
-    "edc": "Eau de Cologne",
-    "eau de cologne": "Eau de Cologne",
-    "parfum": "Parfum / Extrait de Parfum",
-    "extrait": "Parfum / Extrait de Parfum",
-    "extrait de parfum": "Parfum / Extrait de Parfum",
-    "parfum / extrait de parfum": "Parfum / Extrait de Parfum",
-    "eau fraiche": "Eau Fraîche",
-    "fraiche": "Eau Fraîche",
-    "body mist": "Body Mist",
-    "mist": "Body Mist",
-    "perfume oil": "Perfume Oil",
-    "oil": "Perfume Oil",
-    "aceite": "Perfume Oil",
-  };
-  if (aliases[norm]) return aliases[norm];
-  // Legacy: preserva texto original (el form lo muestra como "Actual: …").
-  return trimmed;
-}
-
-/** Distancia de Levenshtein entre dos strings (tope ~30 chars cada uno).
- *  Usada sólo para fuzzy match de marcas con typos de 1 letra. */
-function levenshtein(a: string, b: string): number {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const prev = new Array(b.length + 1);
-  const curr = new Array(b.length + 1);
-  for (let j = 0; j <= b.length; j++) prev[j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    curr[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-    }
-    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
-  }
-  return prev[b.length];
-}
+// ── Funciones de mapeo/fuzzy (género, volumen, concentración, marca) viven
+// ── ahora en import-metadata-resolver.ts. Este archivo solo lee columnas
+// ── crudas y delega la inferencia al resolver desde buildPreview, que es
+// ── el único que tiene acceso al catálogo de marcas.
 
 /** Devuelve el valor del primer header del row cuyo nombre normalizado
  *  empiece con alguno de los prefijos. Útil para headers largos del Excel
@@ -321,47 +173,22 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
     );
     const acordesCsv = pick(r, "ACORDES_PRINCIPALES", "ACORDES", "ACORDES PRINCIPALES", "ACORDES_OLFATIVOS");
     const acordes = splitCsv(acordesCsv);
-    // Género: mapeo libre → enum DB. Aliases extra + inferencia desde nombre/modelo.
-    const generoRaw = pick(r, "GENERO", "GENDER", "SEXO", "PUBLICO", "DESTINADO_A", "LINEA")
+    // Crudos de columnas — el resolver corre en buildPreview y los procesa
+    // junto con nombre/modelo/descripción + catálogo de marcas. Aquí solo
+    // capturamos los valores tal como vinieron del Excel.
+    const _raw_genero_column =
+      pick(r, "GENERO", "GENDER", "SEXO", "PUBLICO", "DESTINADO_A", "LINEA")
       || pickByPrefix(r, "GENERO", "GENDER", "SEXO");
-    let genero = mapGenero(generoRaw);
-    if (generoRaw && !genero) {
-      warnings.push(`GENERO "${generoRaw}" no reconocido — se intenta inferir del nombre/modelo.`);
-    }
-    // Si vino vacío o no reconocido, intentar inferir de modelo/nombre/descripción
-    // buscando "POUR HOMME", "FOR HER", "PARA HOMBRE", etc.
-    if (!genero) {
-      genero = inferirGeneroDesdeTexto(modelo)
-        ?? inferirGeneroDesdeTexto(nombre)
-        ?? inferirGeneroDesdeTexto(descripcion_corta);
-      if (genero) {
-        warnings.push(`GENERO inferido del nombre/modelo: ${genero.toUpperCase()}.`);
-      }
-    }
-    // Volumen en ml: parser tolerante + aliases + fallback por prefijo +
-    // extracción desde texto descriptivo como última red.
-    let volumen_ml = parseMl(
+    const _raw_volumen_column =
       pick(r, "VOLUMEN_ML", "PRESENTACION_ML", "ML", "CAPACIDAD_ML", "TAMANO_ML",
               "MILILITROS", "CONTENIDO_ML", "CC")
-    );
-    if (volumen_ml == null) {
-      volumen_ml = parseMl(
-        pickByPrefix(r, "VOLUMEN", "PRESENTACION", "TAMANO", "CAPACIDAD",
-                        "MILILITROS", "CONTENIDO")
-      );
-    }
-    if (volumen_ml == null) {
-      volumen_ml = extractMlFromText(modelo)
-        ?? extractMlFromText(nombre)
-        ?? extractMlFromText(descripcion_corta);
-      if (volumen_ml != null) {
-        warnings.push(`VOLUMEN_ML inferido del texto: ${volumen_ml} ml.`);
-      }
-    }
-    // Concentración: NO uppercase. El dropdown del form compara case-sensitive
-    // contra el catálogo CONCENTRACIONES, así que devolvemos el casing canónico
-    // ("Eau de Parfum", no "EAU DE PARFUM"). Acepta aliases (EDP, EDT, etc.).
-    const concentracion = mapConcentracion(pick(r, "CONCENTRACION", "CONCENTRACIÓN"));
+      || pickByPrefix(r, "VOLUMEN", "PRESENTACION", "TAMANO", "CAPACIDAD",
+                         "MILILITROS", "CONTENIDO");
+    const _raw_concentracion_column = pick(r, "CONCENTRACION", "CONCENTRACIÓN");
+    // Inicialmente null/vacío — el resolver los completa en buildPreview.
+    const genero: "masculino" | "femenino" | "unisex" | null = null;
+    const volumen_ml: number | null = null;
+    const concentracion: string | null = null;
     // Tipo de presentación: si contiene "DECANT" lo marcamos es_decant.
     const tipoPresentacion = normalizeUpperText(
       pick(r, "TIPO_PRESENTACION", "TIPO_DE_PRESENTACION", "TIPO DE PRESENTACION")
@@ -418,6 +245,10 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
       notas_fondo,
       errors,
       warnings,
+      _raw_marca_column: marca,
+      _raw_genero_column,
+      _raw_concentracion_column,
+      _raw_volumen_column,
     };
   });
 }
@@ -502,6 +333,14 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
   const skuVistos = new Set<string>();
   const codbarVistos = new Set<string>();
 
+  // Catálogo de marcas en forma {id, nombre} para que el resolver pueda
+  // razonar contra ellas. marcasByName ya tiene los nombres upper-trimmed
+  // (igual que como se persisten en marcas.nombre via parseProductosRows).
+  const brandsCatalogCache: MarcaCatalogo[] = [];
+  for (const [nombre, id] of maps.marcasByName) {
+    brandsCatalogCache.push({ id, nombre });
+  }
+
   const rows: PreviewRow[] = parsed.map((p) => {
     // Errores fila
     if (p.sku && skuVistos.has(p.sku)) p.errors.push(`SKU "${p.sku}" duplicado en el archivo.`);
@@ -551,52 +390,38 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       p.warnings.push(`Ubicación "${p.ubicacion_nombre}" no existe.`);
       ubisFaltantes.add(p.ubicacion_nombre);
     }
-    // Marca: resuelve a marca_id (FK).
-    //   1) match exacto por nombre upper-trimmed.
-    //   2) fuzzy: typo de 1 letra contra marcas existentes (DIIOR→DIOR).
-    //   3) si sigue sin venir, intentar inferir desde el inicio de modelo/nombre.
-    //   4) si no existe, marcarla como faltante para "crear faltantes".
-    if (p.marca) {
-      let mid = maps.marcasByName.get(p.marca);
-      if (!mid && p.marca.length >= 4) {
-        // Fuzzy: una sola edición y nombres parecidos en longitud (±2).
-        let best: { nombre: string; dist: number } | null = null;
-        for (const [nombre] of maps.marcasByName) {
-          if (Math.abs(nombre.length - p.marca.length) > 2) continue;
-          const d = levenshtein(p.marca, nombre);
-          if (d <= 1 && (!best || d < best.dist)) best = { nombre, dist: d };
-        }
-        if (best) {
-          p.warnings.push(`Marca "${p.marca}" mapeada a "${best.nombre}" (typo).`);
-          p.marca = best.nombre;
-          mid = maps.marcasByName.get(best.nombre);
-        }
+    // RESOLVER: razona sobre los crudos del Excel + texto libre +
+    // catálogo de marcas existentes y completa marca/género/concentración/
+    // volumen_ml. NUNCA crea marcas: si no encuentra match en el catálogo,
+    // devuelve marca_legacy_text y warning para que el usuario la asigne.
+    const brandsCatalog: MarcaCatalogo[] = brandsCatalogCache;
+    const resolved = resolveImportedProductMetadata(
+      {
+        marcaColumn: p._raw_marca_column,
+        generoColumn: p._raw_genero_column,
+        concentracionColumn: p._raw_concentracion_column,
+        volumenColumn: p._raw_volumen_column,
+        nombre: p.nombre,
+        modelo: p.modelo,
+        descripcion: p.descripcion_corta,
+      },
+      brandsCatalog,
+    );
+    if (resolved.marca_id) {
+      p.marca_id = resolved.marca_id;
+      // Sincronizar texto con el nombre canónico del catálogo.
+      if (resolved.marca_canonical_name) {
+        p.marca = resolved.marca_canonical_name;
       }
-      if (mid) {
-        p.marca_id = mid;
-      } else {
-        p.warnings.push(`Marca "${p.marca}" no existe — se creará automáticamente al importar.`);
-        marcasFaltantes.add(p.marca);
-      }
-    } else {
-      // Inferir marca del comienzo del modelo o nombre. Probar primero 2 palabras
-      // (ej "HUGO BOSS"), después 1 palabra. Sólo aceptamos si matchea exacto en DB.
-      const candidatos = [p.modelo, p.nombre].filter(Boolean);
-      for (const cand of candidatos) {
-        const words = cand.split(/\s+/).filter(Boolean);
-        for (const len of [2, 1] as const) {
-          if (words.length < len) continue;
-          const guess = words.slice(0, len).join(" ").toUpperCase();
-          if (guess && maps.marcasByName.has(guess)) {
-            p.marca = guess;
-            p.marca_id = maps.marcasByName.get(guess)!;
-            p.warnings.push(`Marca "${guess}" inferida del nombre del producto.`);
-            break;
-          }
-        }
-        if (p.marca) break;
-      }
+    } else if (resolved.marca_legacy_text) {
+      // Sin match en catálogo — preservar texto legacy.
+      p.marca = resolved.marca_legacy_text;
+      marcasFaltantes.add(p.marca);
     }
+    if (resolved.genero) p.genero = resolved.genero;
+    if (resolved.concentracion) p.concentracion = resolved.concentracion;
+    if (resolved.volumen_ml != null) p.volumen_ml = resolved.volumen_ml;
+    for (const w of resolved.warnings) p.warnings.push(w);
 
     // Avisos finales: campos clave que quedaron vacíos tras todos los intentos.
     // Permite ver de un vistazo en el preview qué filas hay que completar antes
@@ -761,46 +586,21 @@ export async function commitProductos(
     }
   }
 
-  // MARCAS: se crean SIEMPRE (no dependen del checkbox). Razonamiento: si el
-  // Excel trae "DIOR" como marca de un producto, no tiene sentido dejar marca_id
-  // en null. La marca como entidad debe existir para que el producto aparezca
-  // correctamente en el catálogo web. Categorías/proveedores/ubicaciones sí
-  // requieren juicio del usuario porque pueden tener atributos no triviales.
-  const marcasNew = new Set<string>();
-  for (const p of parsed) {
-    if (p.marca && !maps.marcasByName.has(p.marca)) marcasNew.add(p.marca);
-  }
-  for (const nombre of marcasNew) {
-    try {
-      const slug = slugifyMarca(nombre);
-      const r = await pool.query<{ id: string }>(
-        `INSERT INTO ${tMar} (empresa_id, nombre, slug_web, visible_web, orden_web, activo)
-         VALUES ($1::uuid, $2, $3, true, 0, true)
-         RETURNING id`,
-        [empresaId, nombre, slug]
-      );
-      maps.marcasByName.set(nombre, r.rows[0].id);
-      out.warningMessages.push(`Marca creada: ${nombre}`);
-    } catch (e) { out.errorMessages.push(`No se pudo crear marca ${nombre}: ${(e as Error).message}`); }
-  }
-  // Refrescar marca_id en filas parseadas (también las que ya existían pero
-  // no se habían podido resolver al momento del buildPreview).
-  for (const p of parsed) {
-    if (p.marca && !p.marca_id) {
-      const mid = maps.marcasByName.get(p.marca);
-      if (mid) p.marca_id = mid;
-    }
-  }
-
-  // CATEGORIAS / PROVEEDORES / UBICACIONES: opt-in vía checkbox "crear faltantes"
+  // CATEGORIAS / PROVEEDORES / UBICACIONES / MARCAS faltantes: opt-in vía
+  // checkbox "crear faltantes" en el wizard (patrón previo del proyecto).
+  // El resolver de buildPreview NUNCA crea marcas — solo razona contra catálogo
+  // existente y deja marca_legacy_text si no encuentra match. Recién acá, si el
+  // usuario tildó el checkbox, se crean las que falten.
   if (crearFaltantes) {
     const cats = new Set<string>();
     const provs = new Set<string>();
     const ubis = new Set<string>();
+    const marcasNew = new Set<string>();
     for (const p of parsed) {
       if (p.categoria_nombre && !maps.categoriasByName.has(p.categoria_nombre)) cats.add(p.categoria_nombre);
       if (p.proveedor_nombre && !maps.proveedoresByName.has(p.proveedor_nombre)) provs.add(p.proveedor_nombre);
       if (p.ubicacion_nombre && !maps.ubicacionesByName.has(p.ubicacion_nombre) && !maps.ubicacionesByCodigo.has(p.ubicacion_nombre)) ubis.add(p.ubicacion_nombre);
+      if (p.marca && !p.marca_id && !maps.marcasByName.has(p.marca)) marcasNew.add(p.marca);
     }
     for (const nombre of cats) {
       try {
@@ -822,6 +622,26 @@ export async function commitProductos(
         maps.ubicacionesByName.set(nombre, r.rows[0].id);
         out.warningMessages.push(`Ubicación creada: ${nombre} (tipo: otro)`);
       } catch (e) { out.errorMessages.push(`No se pudo crear ubicación ${nombre}: ${(e as Error).message}`); }
+    }
+    for (const nombre of marcasNew) {
+      try {
+        const slug = slugifyMarca(nombre);
+        const r = await pool.query<{ id: string }>(
+          `INSERT INTO ${tMar} (empresa_id, nombre, slug_web, visible_web, orden_web, activo)
+           VALUES ($1::uuid, $2, $3, true, 0, true)
+           RETURNING id`,
+          [empresaId, nombre, slug]
+        );
+        maps.marcasByName.set(nombre, r.rows[0].id);
+        out.warningMessages.push(`Marca creada: ${nombre}`);
+      } catch (e) { out.errorMessages.push(`No se pudo crear marca ${nombre}: ${(e as Error).message}`); }
+    }
+    // Refrescar marca_id en filas parseadas que ahora sí tienen marca creada.
+    for (const p of parsed) {
+      if (p.marca && !p.marca_id) {
+        const mid = maps.marcasByName.get(p.marca);
+        if (mid) p.marca_id = mid;
+      }
     }
   }
 

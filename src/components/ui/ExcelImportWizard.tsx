@@ -126,10 +126,11 @@ export default function ExcelImportWizard({
                 <div className="space-y-1">
                   <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
                     <input type="checkbox" checked={crearFaltantes} onChange={(e) => setCrearFaltantes(e.target.checked)} />
-                    Crear categorías, proveedores o ubicaciones faltantes durante la importación
+                    Crear marcas, categorías, proveedores o ubicaciones faltantes durante la importación
                   </label>
                   <p className="text-xs text-slate-500 pl-6">
-                    Las <strong>marcas</strong> se crean automáticamente siempre (no requieren este check).
+                    Sin este check, las marcas que no existen quedan como texto legacy en el producto
+                    (vas a verlas como warning en el preview).
                   </p>
                 </div>
               )}
