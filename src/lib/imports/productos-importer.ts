@@ -4,6 +4,7 @@
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { normalizeUpperText, normalizeUpperNullable } from "@/lib/text/normalize";
+import { CONCENTRACIONES } from "@/lib/inventario/concentraciones";
 import type { PreviewRow, PreviewResponse } from "@/lib/excel/import-types";
 import { pick, pickNumber, pickBool, pickBoolNullable, chunked } from "./import-helpers";
 import type { Pool } from "pg";
@@ -151,6 +152,55 @@ function extractMlFromText(text: string): number | null {
   if (!m) return null;
   const n = Number(m[1].replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) && n >= 1 && n <= 5000 ? Math.floor(n) : null;
+}
+
+/** Normaliza el valor crudo de CONCENTRACION al casing exacto del catálogo
+ *  CONCENTRACIONES (ej: "EAU DE PARFUM" → "Eau de Parfum"). El form usa un
+ *  `<select>` que compara value case-sensitive contra las opciones del catálogo;
+ *  si guardábamos en mayúsculas, el dropdown se mostraba vacío aunque la DB
+ *  tuviera el valor. Acepta aliases comunes (EDP/EDT/EDC) y para valores no
+ *  reconocidos preserva el texto tal cual vino (queda como opción "Actual: …"
+ *  en el form). Devuelve null si la celda está vacía. */
+function mapConcentracion(raw: string): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const norm = trimmed
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  // Match contra catálogo canónico (case/accents insensitive).
+  for (const c of CONCENTRACIONES) {
+    const cNorm = c
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase();
+    if (cNorm === norm) return c;
+  }
+  // Aliases comunes.
+  const aliases: Record<string, string> = {
+    "edp": "Eau de Parfum",
+    "eau de parfum": "Eau de Parfum",
+    "edt": "Eau de Toilette",
+    "eau de toilette": "Eau de Toilette",
+    "edc": "Eau de Cologne",
+    "eau de cologne": "Eau de Cologne",
+    "parfum": "Parfum / Extrait de Parfum",
+    "extrait": "Parfum / Extrait de Parfum",
+    "extrait de parfum": "Parfum / Extrait de Parfum",
+    "parfum / extrait de parfum": "Parfum / Extrait de Parfum",
+    "eau fraiche": "Eau Fraîche",
+    "fraiche": "Eau Fraîche",
+    "body mist": "Body Mist",
+    "mist": "Body Mist",
+    "perfume oil": "Perfume Oil",
+    "oil": "Perfume Oil",
+    "aceite": "Perfume Oil",
+  };
+  if (aliases[norm]) return aliases[norm];
+  // Legacy: preserva texto original (el form lo muestra como "Actual: …").
+  return trimmed;
 }
 
 /** Distancia de Levenshtein entre dos strings (tope ~30 chars cada uno).
@@ -307,7 +357,10 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
         warnings.push(`VOLUMEN_ML inferido del texto: ${volumen_ml} ml.`);
       }
     }
-    const concentracion = normalizeUpperText(pick(r, "CONCENTRACION", "CONCENTRACIÓN")) || null;
+    // Concentración: NO uppercase. El dropdown del form compara case-sensitive
+    // contra el catálogo CONCENTRACIONES, así que devolvemos el casing canónico
+    // ("Eau de Parfum", no "EAU DE PARFUM"). Acepta aliases (EDP, EDT, etc.).
+    const concentracion = mapConcentracion(pick(r, "CONCENTRACION", "CONCENTRACIÓN"));
     // Tipo de presentación: si contiene "DECANT" lo marcamos es_decant.
     const tipoPresentacion = normalizeUpperText(
       pick(r, "TIPO_PRESENTACION", "TIPO_DE_PRESENTACION", "TIPO DE PRESENTACION")
