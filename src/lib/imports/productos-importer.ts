@@ -54,8 +54,23 @@ export interface ProductoParsed {
 const METODOS = new Set(["CPP", "FIFO", "LIFO"]);
 
 /** Mapea valores libres de género a los 3 enums aceptados por la DB.
- *  Es tolerante: acepta plurales, acentos, mayúsculas/minúsculas, espacios
- *  extra y prefijos parciales (ej: "MUJ", "Mujeres", "Hombres", "varón"). */
+ *  Es ultra-tolerante: acepta plurales, acentos, mayúsculas/minúsculas, espacios
+ *  extra, prefijos parciales, ES/EN, y frases compuestas tipo "PARA HOMBRE",
+ *  "FOR WOMEN", "LÍNEA MUJER", "POUR HOMME", "FOR HIM", etc. */
+const GENERO_FEM_TOKENS = new Set([
+  "mujer", "mujeres", "femenino", "femenina", "feminine", "f", "fem",
+  "woman", "women", "womens", "ladies", "lady", "girl", "girls",
+  "ella", "ellas", "her", "hers", "femme", "femmes", "donna", "donne",
+]);
+const GENERO_MASC_TOKENS = new Set([
+  "hombre", "hombres", "varon", "varones", "masculino", "masculina", "masculine",
+  "m", "masc", "man", "men", "mens", "gentleman", "gentlemen",
+  "boy", "boys", "ellos", "him", "his", "homme", "hommes", "uomo", "uomini",
+]);
+const GENERO_UNI_TOKENS = new Set([
+  "unisex", "u", "x", "ambos", "ambas", "todos", "todas",
+  "neutral", "neutro", "any", "all", "mixto", "mixta",
+]);
 function mapGenero(raw: string): "masculino" | "femenino" | "unisex" | null {
   const v = raw
     .normalize("NFD")
@@ -63,15 +78,96 @@ function mapGenero(raw: string): "masculino" | "femenino" | "unisex" | null {
     .trim()
     .toLowerCase();
   if (!v) return null;
-  // 1) Exactos / aliases comunes.
-  if (["mujer", "mujeres", "femenino", "femenina", "f", "fem", "woman", "women"].includes(v)) return "femenino";
-  if (["hombre", "hombres", "varon", "varones", "masculino", "masculina", "m", "masc", "man", "men"].includes(v)) return "masculino";
-  if (["unisex", "u", "x", "ambos", "ambas", "todos", "todas"].includes(v)) return "unisex";
-  // 2) Fallback por prefijo — última red de seguridad para typos / variantes.
+  // 1) Match exacto.
+  if (GENERO_FEM_TOKENS.has(v)) return "femenino";
+  if (GENERO_MASC_TOKENS.has(v)) return "masculino";
+  if (GENERO_UNI_TOKENS.has(v)) return "unisex";
+  // 2) Tokenización: capta "para hombre", "for women", "linea mujer", "pour homme".
+  const tokens = v.split(/[\s\-_,;.\/'"()]+/).filter(Boolean);
+  // Prioridad: si aparece "unisex" o "ambos" en cualquier parte, gana unisex.
+  if (tokens.some((t) => GENERO_UNI_TOKENS.has(t))) return "unisex";
+  const hayFem = tokens.some((t) => GENERO_FEM_TOKENS.has(t));
+  const hayMasc = tokens.some((t) => GENERO_MASC_TOKENS.has(t));
+  if (hayFem && hayMasc) return "unisex"; // "hombre y mujer" → unisex
+  if (hayFem) return "femenino";
+  if (hayMasc) return "masculino";
+  // 3) Fallback por prefijo (última red para typos).
   if (v.startsWith("muj") || v.startsWith("fem")) return "femenino";
   if (v.startsWith("hom") || v.startsWith("var") || v.startsWith("masc")) return "masculino";
   if (v.startsWith("uni")) return "unisex";
   return null;
+}
+
+/** Intenta inferir género desde texto libre (modelo/nombre/descripción) buscando
+ *  marcadores típicos de perfumería: "pour homme", "for him", "for men", "para él",
+ *  etc. Sólo devuelve un género si encuentra una señal clara — null si ambiguo. */
+function inferirGeneroDesdeTexto(text: string): "masculino" | "femenino" | "unisex" | null {
+  if (!text) return null;
+  const v = text
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  const isFem = /\b(pour\s+femme|for\s+her|for\s+women|para\s+ella|para\s+mujer|de\s+mujer|woman|women|femme|donna|ladies)\b/.test(v);
+  const isMasc = /\b(pour\s+homme|for\s+him|for\s+men|para\s+el|para\s+hombre|de\s+hombre|homme|uomo|men's|gentleman)\b/.test(v);
+  const isUni = /\b(unisex|for\s+all|para\s+todos)\b/.test(v);
+  if (isUni) return "unisex";
+  if (isFem && isMasc) return "unisex";
+  if (isFem) return "femenino";
+  if (isMasc) return "masculino";
+  return null;
+}
+
+/** Extrae el volumen en ml de un valor de celda libre. Acepta números puros
+ *  ("100", "100,5") y números con unidad ("100 ml", "100ML", "30 cc"). Bounds
+ *  razonables (1..5000) para no aceptar años/IDs. */
+function parseMl(raw: string): number | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  // 1) Número con unidad ml/mL/cc.
+  const m1 = s.match(/(\d+(?:[.,]\d+)?)\s*(?:m\s*l|cc)\b/i);
+  if (m1) {
+    const n = Number(m1[1].replace(/\./g, "").replace(",", "."));
+    if (Number.isFinite(n) && n >= 1 && n <= 5000) return Math.floor(n);
+  }
+  // 2) Cell sólo número (formato AR "1.000,5" o EN "1000.5").
+  const onlyNum = s.replace(/\./g, "").replace(",", ".");
+  if (/^-?\d+(\.\d+)?$/.test(onlyNum)) {
+    const n = Number(onlyNum);
+    if (Number.isFinite(n) && n >= 1 && n <= 5000) return Math.floor(n);
+  }
+  return null;
+}
+
+/** Última red: extraer ml de campos descriptivos (MODELO, NOMBRE,
+ *  SKU_DESCRIPCION). Requiere unidad explícita "ml"/"cc" para no confundir
+ *  códigos/años con volumen. */
+function extractMlFromText(text: string): number | null {
+  if (!text) return null;
+  const m = String(text).match(/(\d+(?:[.,]\d+)?)\s*(?:m\s*l|cc)\b/i);
+  if (!m) return null;
+  const n = Number(m[1].replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) && n >= 1 && n <= 5000 ? Math.floor(n) : null;
+}
+
+/** Distancia de Levenshtein entre dos strings (tope ~30 chars cada uno).
+ *  Usada sólo para fuzzy match de marcas con typos de 1 letra. */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  const prev = new Array(b.length + 1);
+  const curr = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+  }
+  return prev[b.length];
 }
 
 /** Devuelve el valor del primer header del row cuyo nombre normalizado
@@ -100,7 +196,12 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
   return rows.map((r, idx) => {
     const errors: string[] = [];
     const warnings: string[] = [];
-    const marca = normalizeUpperText(pick(r, "MARCA"));
+    // MARCA: explícita por aliases comunes + fallback por prefijo de header
+    // (ej: "MARCA_PRINCIPAL", "MARCA PRODUCTO", "BRAND NAME").
+    const marca = normalizeUpperText(
+      pick(r, "MARCA", "MARCA_PRINCIPAL", "MARCA_PRODUCTO", "BRAND", "BRAND_NAME", "FABRICANTE")
+        || pickByPrefix(r, "MARCA", "BRAND")
+    );
     const modelo = normalizeUpperText(pick(r, "MODELO", "SKU_PRODUCT", "SKU PRODUCT"));
     const descripcion_corta = normalizeUpperText(
       pick(r, "SKU_DESCRIPCION", "SKU DESCRIPCION", "DESCRIPCION_CORTA", "DESCRIPCION CORTA", "DESCRIPCION")
@@ -166,15 +267,43 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
     );
     const acordesCsv = pick(r, "ACORDES_PRINCIPALES", "ACORDES", "ACORDES PRINCIPALES", "ACORDES_OLFATIVOS");
     const acordes = splitCsv(acordesCsv);
-    // Género: mapeo libre → enum DB.
-    const generoRaw = pick(r, "GENERO", "GENDER", "SEXO");
-    const genero = mapGenero(generoRaw);
+    // Género: mapeo libre → enum DB. Aliases extra + inferencia desde nombre/modelo.
+    const generoRaw = pick(r, "GENERO", "GENDER", "SEXO", "PUBLICO", "DESTINADO_A", "LINEA")
+      || pickByPrefix(r, "GENERO", "GENDER", "SEXO");
+    let genero = mapGenero(generoRaw);
     if (generoRaw && !genero) {
-      warnings.push(`GENERO "${generoRaw}" no reconocido (esperado: MUJER, HOMBRE, UNISEX).`);
+      warnings.push(`GENERO "${generoRaw}" no reconocido — se intenta inferir del nombre/modelo.`);
     }
-    // Volumen en ml.
-    const volRaw = pickNumber(r, "VOLUMEN_ML", "PRESENTACION_ML", "PRESENTACION ML", "ML");
-    const volumen_ml = volRaw > 0 ? Math.floor(volRaw) : null;
+    // Si vino vacío o no reconocido, intentar inferir de modelo/nombre/descripción
+    // buscando "POUR HOMME", "FOR HER", "PARA HOMBRE", etc.
+    if (!genero) {
+      genero = inferirGeneroDesdeTexto(modelo)
+        ?? inferirGeneroDesdeTexto(nombre)
+        ?? inferirGeneroDesdeTexto(descripcion_corta);
+      if (genero) {
+        warnings.push(`GENERO inferido del nombre/modelo: ${genero.toUpperCase()}.`);
+      }
+    }
+    // Volumen en ml: parser tolerante + aliases + fallback por prefijo +
+    // extracción desde texto descriptivo como última red.
+    let volumen_ml = parseMl(
+      pick(r, "VOLUMEN_ML", "PRESENTACION_ML", "ML", "CAPACIDAD_ML", "TAMANO_ML",
+              "MILILITROS", "CONTENIDO_ML", "CC")
+    );
+    if (volumen_ml == null) {
+      volumen_ml = parseMl(
+        pickByPrefix(r, "VOLUMEN", "PRESENTACION", "TAMANO", "CAPACIDAD",
+                        "MILILITROS", "CONTENIDO")
+      );
+    }
+    if (volumen_ml == null) {
+      volumen_ml = extractMlFromText(modelo)
+        ?? extractMlFromText(nombre)
+        ?? extractMlFromText(descripcion_corta);
+      if (volumen_ml != null) {
+        warnings.push(`VOLUMEN_ML inferido del texto: ${volumen_ml} ml.`);
+      }
+    }
     const concentracion = normalizeUpperText(pick(r, "CONCENTRACION", "CONCENTRACIÓN")) || null;
     // Tipo de presentación: si contiene "DECANT" lo marcamos es_decant.
     const tipoPresentacion = normalizeUpperText(
@@ -325,17 +454,59 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       p.warnings.push(`Ubicación "${p.ubicacion_nombre}" no existe.`);
       ubisFaltantes.add(p.ubicacion_nombre);
     }
-    // Marca: resuelve a marca_id (FK). Si no existe la marcamos como faltante
-    // para que el flujo "crear faltantes" la cree en commit.
+    // Marca: resuelve a marca_id (FK).
+    //   1) match exacto por nombre upper-trimmed.
+    //   2) fuzzy: typo de 1 letra contra marcas existentes (DIIOR→DIOR).
+    //   3) si sigue sin venir, intentar inferir desde el inicio de modelo/nombre.
+    //   4) si no existe, marcarla como faltante para "crear faltantes".
     if (p.marca) {
-      const mid = maps.marcasByName.get(p.marca);
+      let mid = maps.marcasByName.get(p.marca);
+      if (!mid && p.marca.length >= 4) {
+        // Fuzzy: una sola edición y nombres parecidos en longitud (±2).
+        let best: { nombre: string; dist: number } | null = null;
+        for (const [nombre] of maps.marcasByName) {
+          if (Math.abs(nombre.length - p.marca.length) > 2) continue;
+          const d = levenshtein(p.marca, nombre);
+          if (d <= 1 && (!best || d < best.dist)) best = { nombre, dist: d };
+        }
+        if (best) {
+          p.warnings.push(`Marca "${p.marca}" mapeada a "${best.nombre}" (typo).`);
+          p.marca = best.nombre;
+          mid = maps.marcasByName.get(best.nombre);
+        }
+      }
       if (mid) {
         p.marca_id = mid;
       } else {
         p.warnings.push(`Marca "${p.marca}" no existe (se creará si tildás "crear faltantes").`);
         marcasFaltantes.add(p.marca);
       }
+    } else {
+      // Inferir marca del comienzo del modelo o nombre. Probar primero 2 palabras
+      // (ej "HUGO BOSS"), después 1 palabra. Sólo aceptamos si matchea exacto en DB.
+      const candidatos = [p.modelo, p.nombre].filter(Boolean);
+      for (const cand of candidatos) {
+        const words = cand.split(/\s+/).filter(Boolean);
+        for (const len of [2, 1] as const) {
+          if (words.length < len) continue;
+          const guess = words.slice(0, len).join(" ").toUpperCase();
+          if (guess && maps.marcasByName.has(guess)) {
+            p.marca = guess;
+            p.marca_id = maps.marcasByName.get(guess)!;
+            p.warnings.push(`Marca "${guess}" inferida del nombre del producto.`);
+            break;
+          }
+        }
+        if (p.marca) break;
+      }
     }
+
+    // Avisos finales: campos clave que quedaron vacíos tras todos los intentos.
+    // Permite ver de un vistazo en el preview qué filas hay que completar antes
+    // de commitear.
+    if (!p.marca) p.warnings.push("MARCA vacía — no se pudo determinar (revisar columna MARCA o nombre del producto).");
+    if (!p.genero) p.warnings.push("GENERO vacío — no se pudo determinar (esperado: MUJER, HOMBRE, UNISEX).");
+    if (p.volumen_ml == null) p.warnings.push("VOLUMEN_ML vacío — no se pudo determinar (revisar columna o agregar '100ml' al nombre).");
 
     const hasErr = p.errors.length > 0;
     const action = hasErr ? "ERROR" : matchId ? "UPDATE" : "INSERT";
