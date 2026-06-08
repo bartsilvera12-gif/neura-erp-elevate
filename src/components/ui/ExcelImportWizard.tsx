@@ -123,10 +123,15 @@ export default function ExcelImportWizard({
                 <FaltantesBox f={preview.summary.faltantes} />
               )}
               {permiteCrearFaltantes && (
-                <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
-                  <input type="checkbox" checked={crearFaltantes} onChange={(e) => setCrearFaltantes(e.target.checked)} />
-                  Crear categorías, proveedores o ubicaciones faltantes durante la importación
-                </label>
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+                    <input type="checkbox" checked={crearFaltantes} onChange={(e) => setCrearFaltantes(e.target.checked)} />
+                    Crear categorías, proveedores o ubicaciones faltantes durante la importación
+                  </label>
+                  <p className="text-xs text-slate-500 pl-6">
+                    Las <strong>marcas</strong> se crean automáticamente siempre (no requieren este check).
+                  </p>
+                </div>
               )}
               <PreviewTable rows={preview.rows} />
               <div className="flex justify-between gap-2 pt-2">

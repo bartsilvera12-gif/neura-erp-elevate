@@ -485,7 +485,7 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
       if (mid) {
         p.marca_id = mid;
       } else {
-        p.warnings.push(`Marca "${p.marca}" no existe (se creará si tildás "crear faltantes").`);
+        p.warnings.push(`Marca "${p.marca}" no existe — se creará automáticamente al importar.`);
         marcasFaltantes.add(p.marca);
       }
     } else {
@@ -671,17 +671,46 @@ export async function commitProductos(
     }
   }
 
-  // Crear faltantes (categorias/proveedores/ubicaciones/marcas) si corresponde
+  // MARCAS: se crean SIEMPRE (no dependen del checkbox). Razonamiento: si el
+  // Excel trae "DIOR" como marca de un producto, no tiene sentido dejar marca_id
+  // en null. La marca como entidad debe existir para que el producto aparezca
+  // correctamente en el catálogo web. Categorías/proveedores/ubicaciones sí
+  // requieren juicio del usuario porque pueden tener atributos no triviales.
+  const marcasNew = new Set<string>();
+  for (const p of parsed) {
+    if (p.marca && !maps.marcasByName.has(p.marca)) marcasNew.add(p.marca);
+  }
+  for (const nombre of marcasNew) {
+    try {
+      const slug = slugifyMarca(nombre);
+      const r = await pool.query<{ id: string }>(
+        `INSERT INTO ${tMar} (empresa_id, nombre, slug_web, visible_web, orden_web, activo)
+         VALUES ($1::uuid, $2, $3, true, 0, true)
+         RETURNING id`,
+        [empresaId, nombre, slug]
+      );
+      maps.marcasByName.set(nombre, r.rows[0].id);
+      out.warningMessages.push(`Marca creada: ${nombre}`);
+    } catch (e) { out.errorMessages.push(`No se pudo crear marca ${nombre}: ${(e as Error).message}`); }
+  }
+  // Refrescar marca_id en filas parseadas (también las que ya existían pero
+  // no se habían podido resolver al momento del buildPreview).
+  for (const p of parsed) {
+    if (p.marca && !p.marca_id) {
+      const mid = maps.marcasByName.get(p.marca);
+      if (mid) p.marca_id = mid;
+    }
+  }
+
+  // CATEGORIAS / PROVEEDORES / UBICACIONES: opt-in vía checkbox "crear faltantes"
   if (crearFaltantes) {
     const cats = new Set<string>();
     const provs = new Set<string>();
     const ubis = new Set<string>();
-    const marcasNew = new Set<string>();
     for (const p of parsed) {
       if (p.categoria_nombre && !maps.categoriasByName.has(p.categoria_nombre)) cats.add(p.categoria_nombre);
       if (p.proveedor_nombre && !maps.proveedoresByName.has(p.proveedor_nombre)) provs.add(p.proveedor_nombre);
       if (p.ubicacion_nombre && !maps.ubicacionesByName.has(p.ubicacion_nombre) && !maps.ubicacionesByCodigo.has(p.ubicacion_nombre)) ubis.add(p.ubicacion_nombre);
-      if (p.marca && !maps.marcasByName.has(p.marca)) marcasNew.add(p.marca);
     }
     for (const nombre of cats) {
       try {
@@ -703,26 +732,6 @@ export async function commitProductos(
         maps.ubicacionesByName.set(nombre, r.rows[0].id);
         out.warningMessages.push(`Ubicación creada: ${nombre} (tipo: otro)`);
       } catch (e) { out.errorMessages.push(`No se pudo crear ubicación ${nombre}: ${(e as Error).message}`); }
-    }
-    for (const nombre of marcasNew) {
-      try {
-        const slug = slugifyMarca(nombre);
-        const r = await pool.query<{ id: string }>(
-          `INSERT INTO ${tMar} (empresa_id, nombre, slug_web, visible_web, orden_web, activo)
-           VALUES ($1::uuid, $2, $3, true, 0, true)
-           RETURNING id`,
-          [empresaId, nombre, slug]
-        );
-        maps.marcasByName.set(nombre, r.rows[0].id);
-        out.warningMessages.push(`Marca creada: ${nombre}`);
-      } catch (e) { out.errorMessages.push(`No se pudo crear marca ${nombre}: ${(e as Error).message}`); }
-    }
-    // Refrescar marca_id en las filas parseadas que dependían del create.
-    for (const p of parsed) {
-      if (p.marca && !p.marca_id) {
-        const mid = maps.marcasByName.get(p.marca);
-        if (mid) p.marca_id = mid;
-      }
     }
   }
 
