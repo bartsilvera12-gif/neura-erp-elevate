@@ -13,6 +13,7 @@ interface ProductoExistente {
   id: string;
   sku: string;
   codigo_barras: string | null;
+  nombre: string;
   stock_actual: number;
 }
 
@@ -424,6 +425,12 @@ export function parseProductosRows(rows: Record<string, string>[]): ProductoPars
 export interface ResolverMaps {
   productosBySku: Map<string, ProductoExistente>;
   productosByCodigo: Map<string, ProductoExistente>;
+  /** Match por nombre upper-trimmed. Usado como fallback cuando el Excel no
+   *  trae SKU ni código de barras. Si hay duplicados de nombre en DB se queda
+   *  con el primero — se reporta en warnings. */
+  productosByNombre: Map<string, ProductoExistente>;
+  /** Nombres con más de 1 producto en DB (warning al usuario). */
+  productosNombreDuplicados: Set<string>;
   categoriasByName: Map<string, string>;
   proveedoresByName: Map<string, string>;
   ubicacionesByName: Map<string, string>;
@@ -442,7 +449,7 @@ export async function buildResolverMaps(schemaRaw: string, empresaId: string): P
   const tMar = quoteSchemaTable(schema, "marcas");
 
   const [prods, cats, provs, ubis, marcas] = await Promise.all([
-    pool.query<ProductoExistente>(`SELECT id, sku, codigo_barras, stock_actual FROM ${tP} WHERE empresa_id=$1::uuid`, [empresaId]),
+    pool.query<ProductoExistente>(`SELECT id, sku, codigo_barras, nombre, stock_actual FROM ${tP} WHERE empresa_id=$1::uuid`, [empresaId]),
     pool.query<{ id: string; nombre: string }>(`SELECT id, nombre FROM ${tC} WHERE empresa_id=$1::uuid AND activo=true`, [empresaId]),
     pool.query<{ id: string; nombre: string }>(`SELECT id, nombre FROM ${tPr} WHERE empresa_id=$1::uuid`, [empresaId]),
     pool.query<{ id: string; nombre: string; codigo: string | null }>(`SELECT id, nombre, codigo FROM ${tU} WHERE empresa_id=$1::uuid AND activo=true`, [empresaId]),
@@ -451,10 +458,20 @@ export async function buildResolverMaps(schemaRaw: string, empresaId: string): P
 
   const productosBySku = new Map<string, ProductoExistente>();
   const productosByCodigo = new Map<string, ProductoExistente>();
+  const productosByNombre = new Map<string, ProductoExistente>();
+  const productosNombreDuplicados = new Set<string>();
   for (const p of prods.rows) {
-    const normalized: ProductoExistente = { id: p.id, sku: p.sku, codigo_barras: p.codigo_barras, stock_actual: Number(p.stock_actual) };
+    const normalized: ProductoExistente = {
+      id: p.id, sku: p.sku, codigo_barras: p.codigo_barras,
+      nombre: p.nombre, stock_actual: Number(p.stock_actual),
+    };
     if (p.sku) productosBySku.set(p.sku.toUpperCase(), normalized);
     if (p.codigo_barras) productosByCodigo.set(p.codigo_barras.toUpperCase(), normalized);
+    if (p.nombre) {
+      const key = p.nombre.trim().toUpperCase();
+      if (productosByNombre.has(key)) productosNombreDuplicados.add(key);
+      else productosByNombre.set(key, normalized);
+    }
   }
   const categoriasByName = new Map<string, string>();
   for (const c of cats.rows) categoriasByName.set(c.nombre.trim().toUpperCase(), c.id);
@@ -468,7 +485,10 @@ export async function buildResolverMaps(schemaRaw: string, empresaId: string): P
   }
   const marcasByName = new Map<string, string>();
   for (const m of marcas.rows) marcasByName.set(m.nombre.trim().toUpperCase(), m.id);
-  return { productosBySku, productosByCodigo, categoriasByName, proveedoresByName, ubicacionesByName, ubicacionesByCodigo, marcasByName };
+  return {
+    productosBySku, productosByCodigo, productosByNombre, productosNombreDuplicados,
+    categoriasByName, proveedoresByName, ubicacionesByName, ubicacionesByCodigo, marcasByName,
+  };
 }
 
 export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): PreviewResponse {
@@ -489,7 +509,12 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
     if (p.codigo_barras && codbarVistos.has(p.codigo_barras)) p.errors.push(`Código de barras "${p.codigo_barras}" duplicado en el archivo.`);
     if (p.codigo_barras) codbarVistos.add(p.codigo_barras);
 
-    // Match contra DB existente
+    // Match contra DB existente. Orden de prioridad:
+    //   1) CODIGO_BARRAS (más confiable)
+    //   2) SKU
+    //   3) NOMBRE (fallback) — clave para planillas legacy con SKU/cod vacíos.
+    //      Sin esto re-importar el mismo Excel duplica productos en lugar de
+    //      actualizarlos. Si el nombre está duplicado en DB se loguea warning.
     let matchId: string | null = null;
     let stockAnterior: number | null = null;
     if (p.codigo_barras && maps.productosByCodigo.has(p.codigo_barras)) {
@@ -498,6 +523,18 @@ export function buildPreview(parsed: ProductoParsed[], maps: ResolverMaps): Prev
     } else if (p.sku && maps.productosBySku.has(p.sku)) {
       const ex = maps.productosBySku.get(p.sku)!;
       matchId = ex.id; stockAnterior = ex.stock_actual;
+    } else if (p.nombre) {
+      const nombreKey = p.nombre.trim().toUpperCase();
+      if (maps.productosNombreDuplicados.has(nombreKey)) {
+        p.warnings.push(
+          `Nombre "${p.nombre}" aparece en más de un producto de la DB — se hace UPDATE al primero. Revisar manualmente.`
+        );
+      }
+      const ex = maps.productosByNombre.get(nombreKey);
+      if (ex) {
+        matchId = ex.id; stockAnterior = ex.stock_actual;
+        p.warnings.push(`Match por nombre con producto existente (SKU ${ex.sku || "—"}).`);
+      }
     }
     p.match_id = matchId;
 
@@ -806,22 +843,29 @@ export async function commitProductos(
             [p.match_id, empresaId]
           );
           const stockAnterior = Number(prevQ.rows[0]?.stock_actual ?? 0);
+          // UPDATE merge-friendly: para campos opcionales/de catálogo usamos
+          // COALESCE así un Excel parcial no pisa valores ya cargados con null.
+          // Stock/precios/booleans sí se sobrescriben siempre (son datos vivos).
           await pool.query(
             `UPDATE ${tP} SET
-               nombre=$1, sku=$2, modelo=NULLIF($3,''), codigo_barras=NULLIF($4,''),
+               nombre=$1, sku=$2,
+               modelo=COALESCE(NULLIF($3,''), modelo),
+               codigo_barras=COALESCE(NULLIF($4,''), codigo_barras),
                unidad_medida=$5, costo_promedio=$6::numeric, precio_venta=$7::numeric,
                stock_actual=$8::numeric, stock_minimo=$9::numeric,
-               cantidad_minima_minorista=$10::int,
+               cantidad_minima_minorista=COALESCE($10::int, cantidad_minima_minorista),
                metodo_valuacion=$11, activo=$12::boolean,
-               categoria_principal_id=$13::uuid, proveedor_principal_id=$14::uuid, ubicacion_principal_id=$15::uuid,
-               marca=NULLIF($18,''),
-               descripcion_corta=NULLIF($19,''),
-               marca_id=$20::uuid,
-               genero=$21,
-               volumen_ml=$22::int,
-               concentracion=NULLIF($23,''),
-               precio_mayorista=$24::numeric,
-               cantidad_minima_mayorista=$25::int,
+               categoria_principal_id=COALESCE($13::uuid, categoria_principal_id),
+               proveedor_principal_id=COALESCE($14::uuid, proveedor_principal_id),
+               ubicacion_principal_id=COALESCE($15::uuid, ubicacion_principal_id),
+               marca=COALESCE(NULLIF($18,''), marca),
+               descripcion_corta=COALESCE(NULLIF($19,''), descripcion_corta),
+               marca_id=COALESCE($20::uuid, marca_id),
+               genero=COALESCE($21, genero),
+               volumen_ml=COALESCE($22::int, volumen_ml),
+               concentracion=COALESCE(NULLIF($23,''), concentracion),
+               precio_mayorista=COALESCE($24::numeric, precio_mayorista),
+               cantidad_minima_mayorista=COALESCE($25::int, cantidad_minima_mayorista),
                es_decant=$26::boolean,
                visible_web=COALESCE($27::boolean, visible_web),
                updated_at=now()
