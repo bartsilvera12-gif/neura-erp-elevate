@@ -33,7 +33,7 @@ export function ProductCard({ product }: { product: Product }) {
   const precioMostrado = tienePresentaciones && precioDesde ? precioDesde : product.price;
 
   return (
-    <article className="group relative bg-background border border-border/60 hover:border-gold/60 transition-elegant shadow-soft hover:shadow-elegant flex flex-col overflow-hidden">
+    <article className="group relative h-full bg-background border border-border/60 hover:border-gold/60 transition-elegant shadow-soft hover:shadow-elegant flex flex-col overflow-hidden">
       <Link
         href={`/producto/${product.slug}`}
         onClick={() =>
@@ -59,26 +59,30 @@ export function ProductCard({ product }: { product: Product }) {
           unoptimized
         />
         {product.promo && (
-          <span className="absolute top-4 left-4 bg-primary text-primary-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
+          <span className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-primary text-primary-foreground text-[9px] sm:text-[10px] tracking-[0.15em] sm:tracking-[0.25em] uppercase px-2 py-1 sm:px-3 sm:py-1.5 max-w-[calc(100%-1rem)] truncate">
             {product.promo}
           </span>
         )}
         {product.isNew && !product.promo && (
-          <span className="absolute top-4 left-4 bg-gold text-gold-foreground text-[10px] tracking-[0.25em] uppercase px-3 py-1.5">
+          <span className="absolute top-2 left-2 sm:top-4 sm:left-4 bg-gold text-gold-foreground text-[9px] sm:text-[10px] tracking-[0.15em] sm:tracking-[0.25em] uppercase px-2 py-1 sm:px-3 sm:py-1.5">
             Nuevo
           </span>
         )}
+        {/* En mobile (2 columnas) el badge de stock se omite del overlay para
+            evitar solapamientos con el badge de promo. Se vuelve a mostrar a
+            partir de `sm`. El estado igual se refleja en el botón del CTA
+            ("No disponible") cuando aplica. */}
         <span
-          className={`absolute top-4 right-4 bg-background/90 text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border ${s.cls}`}
+          className={`hidden sm:inline-block absolute top-4 right-4 bg-background/90 text-[10px] tracking-[0.2em] uppercase px-2.5 py-1 border ${s.cls}`}
         >
           {s.label}
         </span>
       </Link>
 
       <div className="p-6 flex flex-col gap-2 flex-1">
-        <div className="text-[10px] tracking-[0.3em] uppercase text-gold">{product.brand}</div>
+        <div className="text-[10px] tracking-[0.3em] uppercase text-gold truncate">{product.brand}</div>
         <Link href={`/producto/${product.slug}`} className="hover:text-primary transition-elegant">
-          <h3 className="font-display text-xl text-foreground leading-tight">{product.name}</h3>
+          <h3 className="font-display text-base sm:text-xl text-foreground leading-tight line-clamp-3 min-h-[3.75em] sm:min-h-[3.5em]">{product.name}</h3>
         </Link>
         {/* Disclaimer discreto: la imagen mostrada puede no coincidir
             exactamente con el envase final del producto entregado. */}
