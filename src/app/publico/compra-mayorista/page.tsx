@@ -66,15 +66,27 @@ export default function CompraMayoristaPage() {
                 </div>
                 <div>
                   <h2 className="font-display text-xl sm:text-2xl md:text-3xl text-primary leading-tight">
-                    Un socio para tu negocio
+                    Elevá tu negocio al siguiente nivel
                   </h2>
                   <div className="gold-divider w-12 sm:w-16 my-3 sm:my-4" />
-                  <p className="text-foreground/80 leading-relaxed text-sm sm:text-base md:text-lg">
-                    Elevate nació para ayudar a emprendedores y pequeñas
-                    perfumerías a acceder a fragancias importadas originales a
-                    precios competitivos. Si revendés o tenés un comercio,
-                    nuestras condiciones mayoristas son para vos.
-                  </p>
+                  <div className="space-y-3 sm:space-y-4 text-foreground/80 leading-relaxed text-sm sm:text-base md:text-lg">
+                    <p>
+                      No pierdas la oportunidad de adquirir la mejor mercadería
+                      al mejor precio para expandir tu negocio. Garantizamos la
+                      responsabilidad corporativa y estamos comprometidos con
+                      nuestros clientes.
+                    </p>
+                    <p>
+                      Nos enorgullece trabajar con diversos emprendedores
+                      nacionales e internacionales como tiendas minoristas,
+                      mayoristas, revendedores y{" "}
+                      <strong className="text-primary font-medium">
+                        más de 10.000 clientes
+                      </strong>{" "}
+                      que nos eligieron para elevar su negocio al siguiente
+                      nivel.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
