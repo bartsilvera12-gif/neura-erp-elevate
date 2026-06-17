@@ -26,18 +26,18 @@ const policies = [
 
 export function Policies() {
   return (
-    <section id="politicas" className="py-24 lg:py-32 bg-background">
+    <section id="politicas" className="py-12 sm:py-24 lg:py-32 bg-background">
       <div className="container mx-auto px-6 lg:px-10">
         <SectionTitle eyebrow="Políticas" title="Compra con tranquilidad" />
-        <div className="mt-14 grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+        <div className="mt-8 sm:mt-14 grid md:grid-cols-2 gap-5 sm:gap-8 max-w-5xl mx-auto">
           {policies.map((p) => (
             <div
               key={p.title}
-              className="border border-border p-8 lg:p-10 bg-cream/30 hover:border-gold transition-elegant flex flex-col"
+              className="border border-border p-5 sm:p-8 lg:p-10 bg-cream/30 hover:border-gold transition-elegant flex flex-col"
             >
-              <h3 className="font-display text-2xl text-primary">{p.title}</h3>
-              <div className="gold-divider w-12 my-5" />
-              <ul className="space-y-3 flex-1">
+              <h3 className="font-display text-xl sm:text-2xl text-primary">{p.title}</h3>
+              <div className="gold-divider w-10 sm:w-12 my-3 sm:my-5" />
+              <ul className="space-y-2 sm:space-y-3 flex-1">
                 {p.items.map((it, i) => (
                   <li key={i} className="flex gap-3 text-foreground/80 text-sm leading-relaxed">
                     <span className="text-gold mt-1">◆</span>
@@ -48,7 +48,7 @@ export function Policies() {
               {p.link && (
                 <Link
                   href={p.link.href}
-                  className="mt-6 inline-block text-xs tracking-[0.3em] uppercase text-gold hover:text-primary transition-smooth"
+                  className="mt-5 sm:mt-6 inline-block text-xs tracking-[0.3em] uppercase text-gold hover:text-primary transition-smooth"
                 >
                   {p.link.label} →
                 </Link>

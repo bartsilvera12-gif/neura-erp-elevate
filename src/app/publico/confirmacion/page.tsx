@@ -12,7 +12,7 @@ export default function ConfirmacionPage() {
   return (
     <Suspense
       fallback={
-        <section className="pt-32 pb-24 min-h-[60vh] flex items-center justify-center">
+        <section className="pt-24 pb-12 sm:pt-32 sm:pb-24 min-h-[60vh] flex items-center justify-center">
           <p className="font-editorial italic text-muted-foreground">Cargando confirmación…</p>
         </section>
       }

@@ -9,7 +9,7 @@ export const metadata = {
 export default function FAQPage() {
   return (
     <>
-      <div className="pt-20" />
+      <div className="pt-10 sm:pt-20" />
       <FAQ />
       <Policies />
     </>

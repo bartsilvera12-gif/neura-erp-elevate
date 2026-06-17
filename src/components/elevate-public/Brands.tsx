@@ -15,7 +15,7 @@ import type { MarcaWeb } from "@/lib/elevate-public/catalog-fetch";
  */
 export function Brands({ marcas }: { marcas: MarcaWeb[] }) {
   return (
-    <section id="marcas" className="py-24 lg:py-32 bg-background">
+    <section id="marcas" className="py-12 sm:py-24 lg:py-32 bg-background">
       <div className="container mx-auto px-6 lg:px-10">
         <SectionTitle
           eyebrow="Marcas"
@@ -23,18 +23,18 @@ export function Brands({ marcas }: { marcas: MarcaWeb[] }) {
           subtitle="Casas perfumistas seleccionadas. Tocá una marca para ver sus fragancias."
         />
         {marcas.length === 0 ? (
-          <p className="mt-12 text-center text-sm text-muted-foreground italic font-editorial">
+          <p className="mt-8 sm:mt-12 text-center text-sm text-muted-foreground italic font-editorial">
             Próximamente vamos a sumar más marcas a nuestra curaduría.
           </p>
         ) : (
-          <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="mt-8 sm:mt-14 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
             {marcas.map((m) => {
               const href = m.slug ? `/catalogo?marca=${encodeURIComponent(m.slug)}` : "/catalogo";
               return (
                 <Link
                   key={m.id}
                   href={href}
-                  className="group relative overflow-hidden border border-border/60 hover:border-gold transition-elegant aspect-[3/4] flex flex-col justify-end p-8 bg-cream/40 hover:shadow-elegant"
+                  className="group relative overflow-hidden border border-border/60 hover:border-gold transition-elegant aspect-[3/4] flex flex-col justify-end p-4 sm:p-8 bg-cream/40 hover:shadow-elegant"
                   aria-label={`Ver productos de ${m.nombre}`}
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-gold/10 group-hover:from-primary/15 transition-elegant" />
@@ -51,14 +51,14 @@ export function Brands({ marcas }: { marcas: MarcaWeb[] }) {
                     </div>
                   )}
                   <div className="relative">
-                    <h3 className="font-display text-2xl text-primary">{m.nombre}</h3>
-                    <div className="gold-divider w-12 my-3" />
+                    <h3 className="font-display text-lg sm:text-2xl text-primary">{m.nombre}</h3>
+                    <div className="gold-divider w-8 sm:w-12 my-2 sm:my-3" />
                     {m.descripcion && (
-                      <p className="text-sm text-muted-foreground font-editorial italic">
+                      <p className="text-xs sm:text-sm text-muted-foreground font-editorial italic">
                         {m.descripcion}
                       </p>
                     )}
-                    <span className="mt-3 inline-block text-[10px] tracking-[0.3em] uppercase text-gold opacity-0 group-hover:opacity-100 transition-elegant">
+                    <span className="mt-2 sm:mt-3 inline-block text-[10px] tracking-[0.3em] uppercase text-gold opacity-0 group-hover:opacity-100 transition-elegant">
                       Ver productos →
                     </span>
                   </div>

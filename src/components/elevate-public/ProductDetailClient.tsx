@@ -148,17 +148,17 @@ export function ProductDetailClient({
 
   return (
     <>
-      <section className="pt-32 pb-20 lg:pb-28">
+      <section className="pt-24 pb-12 sm:pt-32 sm:pb-20 lg:pb-28">
         <div className="container mx-auto px-6 lg:px-10">
           <button
             type="button"
             onClick={() => router.back()}
-            className="inline-flex items-center gap-2 text-[11px] tracking-[0.3em] uppercase text-muted-foreground hover:text-primary mb-10 transition-elegant"
+            className="inline-flex items-center gap-2 text-[11px] tracking-[0.3em] uppercase text-muted-foreground hover:text-primary mb-6 sm:mb-10 transition-elegant"
           >
             <ChevronLeft size={14} /> Volver
           </button>
 
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
+          <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 lg:gap-20 items-start">
             <div className="relative bg-cream overflow-hidden shadow-elegant group">
               <div className="aspect-[4/5] relative">
                 {/* Fase Galería: capas apiladas con fade. Solo la imagen
@@ -425,10 +425,10 @@ export function ProductDetailClient({
       </section>
 
       {related.length > 0 && (
-        <section className="py-20 bg-cream/40">
+        <section className="py-12 sm:py-20 bg-cream/40">
           <div className="container mx-auto px-6 lg:px-10">
             <SectionTitle eyebrow="También te puede interesar" title="Fragancias relacionadas" />
-            <div className="mt-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7 max-w-5xl mx-auto">
+            <div className="mt-8 sm:mt-12 grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-7 max-w-5xl mx-auto [&_article>div:last-child]:p-3 sm:[&_article>div:last-child]:p-6 [&_.items-baseline]:flex-wrap sm:[&_.items-baseline]:flex-nowrap">
               {related.map((p) => (
                 <ProductCard key={p.id} product={p} />
               ))}
@@ -442,7 +442,7 @@ export function ProductDetailClient({
 
 export function ProductNotFoundClient() {
   return (
-    <div className="container mx-auto px-6 py-32 text-center">
+    <div className="container mx-auto px-6 py-20 sm:py-32 text-center">
       <h1 className="font-display text-4xl text-primary mb-4">Producto no encontrado</h1>
       <p className="text-muted-foreground mb-8">La fragancia que buscás no está disponible.</p>
       <Link

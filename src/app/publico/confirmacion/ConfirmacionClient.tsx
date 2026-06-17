@@ -84,18 +84,18 @@ export function ConfirmacionClient() {
   const estadoLabel = pedido ? ESTADO_LABEL[pedido.estado] ?? pedido.estado : null;
 
   return (
-    <section className="pt-32 pb-24 min-h-[80vh] bg-gradient-to-b from-cream/40 to-background">
+    <section className="pt-24 pb-12 sm:pt-32 sm:pb-24 min-h-[80vh] bg-gradient-to-b from-cream/40 to-background">
       <div className="container mx-auto px-6 lg:px-10 max-w-3xl">
-        <div className="text-center mb-12 animate-fade-up">
-          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-gold/15 border border-gold/40 mb-6">
-            <Check size={36} className="text-gold" />
+        <div className="text-center mb-8 sm:mb-12 animate-fade-up">
+          <div className="inline-flex items-center justify-center h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-gold/15 border border-gold/40 mb-4 sm:mb-6">
+            <Check size={32} className="text-gold" />
           </div>
           <span className="text-xs tracking-[0.4em] uppercase text-gold">Orden recibida</span>
-          <h1 className="font-display text-4xl md:text-5xl text-primary mt-3 text-balance">
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl text-primary mt-3 text-balance">
             Gracias por elegir Elevate
           </h1>
-          <div className="gold-divider w-24 mx-auto my-6" />
-          <p className="font-editorial italic text-lg text-muted-foreground max-w-xl mx-auto">
+          <div className="gold-divider w-20 sm:w-24 mx-auto my-4 sm:my-6" />
+          <p className="font-editorial italic text-base sm:text-lg text-muted-foreground max-w-xl mx-auto">
             Tu orden{" "}
             <span className="text-primary not-italic font-medium">{numero ?? "—"}</span>{" "}
             fue registrada{estadoLabel ? ` (${estadoLabel})` : ""}. Te contactaremos por
@@ -104,7 +104,7 @@ export function ConfirmacionClient() {
         </div>
 
         {pedido && (
-          <div className="bg-background border border-border p-8 lg:p-10 shadow-soft">
+          <div className="bg-background border border-border p-5 sm:p-8 lg:p-10 shadow-soft">
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display text-2xl text-primary">Detalle de la orden</h2>
               <span className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
@@ -147,7 +147,7 @@ export function ConfirmacionClient() {
 
         {/* Fallback al snapshot local cuando la API no devuelve nada */}
         {!pedido && loaded && snapshot && (
-          <div className="bg-background border border-border p-8 lg:p-10 shadow-soft">
+          <div className="bg-background border border-border p-5 sm:p-8 lg:p-10 shadow-soft">
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display text-2xl text-primary">Detalle de la orden</h2>
               <span className="text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
@@ -177,7 +177,7 @@ export function ConfirmacionClient() {
           </div>
         )}
 
-        <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="mt-6 sm:mt-10 flex flex-col sm:flex-row gap-3 justify-center">
           <Link
             href="/catalogo"
             className="inline-flex items-center justify-center px-8 py-4 border border-primary text-primary text-xs tracking-[0.3em] uppercase hover:bg-primary hover:text-primary-foreground transition-elegant"

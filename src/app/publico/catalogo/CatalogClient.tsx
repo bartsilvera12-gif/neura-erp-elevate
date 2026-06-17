@@ -146,7 +146,7 @@ export function CatalogClient({
 
   return (
     <>
-      <section className="pt-32 pb-12 bg-gradient-to-b from-cream/40 to-background">
+      <section className="pt-24 pb-8 sm:pt-32 sm:pb-12 bg-gradient-to-b from-cream/40 to-background">
         <div className="container mx-auto px-6 lg:px-10">
           <SectionTitle
             eyebrow="Catálogo"
@@ -154,7 +154,7 @@ export function CatalogClient({
             subtitle="Buscá por nombre, marca, nota olfativa o familia. Filtrá por categoría y estado."
           />
 
-          <div className="mt-12 max-w-2xl mx-auto">
+          <div className="mt-8 sm:mt-12 max-w-2xl mx-auto">
             <div className="relative">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gold" size={18} />
               <input
@@ -184,7 +184,7 @@ export function CatalogClient({
             )}
           </div>
 
-          <div className="mt-10 flex flex-wrap justify-center gap-2 md:gap-3">
+          <div className="mt-6 sm:mt-10 flex flex-wrap justify-center gap-2 md:gap-3">
             {categoryTabs.map((c) => (
               <button
                 key={c}
@@ -255,16 +255,16 @@ export function CatalogClient({
         </div>
       </section>
 
-      <section className="pb-24 lg:pb-32">
+      <section className="pb-12 sm:pb-24 lg:pb-32">
         <div className="container mx-auto px-6 lg:px-10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-7">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 sm:gap-7">
             {list.map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>
 
           {list.length === 0 && (
-            <div className="text-center py-20 max-w-md mx-auto">
+            <div className="text-center py-12 sm:py-20 max-w-md mx-auto">
               <p className="text-muted-foreground font-editorial italic text-lg">
                 No encontramos fragancias con esa búsqueda.
               </p>

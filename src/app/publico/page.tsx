@@ -8,7 +8,7 @@ import { fetchCatalog } from "@/lib/elevate-public/catalog-fetch";
 import { fetchResenasVideos } from "@/lib/elevate-public/resenas-fetch";
 
 export const metadata = {
-  title: "Elevate · Maison de Parfum — Perfumería Premium Original",
+  title: "Elevate Import Export — Perfumería Premium Original",
   description:
     "Elevate: perfumería premium con fragancias nicho, ultranicho, de diseñador y árabes originales. Asesoramiento exclusivo y envíos a todo el país.",
 };

@@ -2,7 +2,7 @@ import { fetchCatalog, fetchCategoriasPublic, fetchMarcasPublic } from "@/lib/el
 import { CatalogClient } from "./CatalogClient";
 
 export const metadata = {
-  title: "Catálogo · Elevate Maison de Parfum",
+  title: "Catálogo · Elevate Import Export",
   description:
     "Explorá nuestra curaduría completa de perfumes nicho, ultranicho, de diseñador y árabes premium.",
 };

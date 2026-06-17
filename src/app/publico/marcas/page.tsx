@@ -14,7 +14,7 @@ export default async function MarcasPage() {
   const marcas = await fetchMarcasPublic();
   return (
     <>
-      <div className="pt-20" />
+      <div className="pt-10 sm:pt-20" />
       <Brands marcas={marcas} />
     </>
   );

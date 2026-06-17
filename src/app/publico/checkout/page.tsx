@@ -140,16 +140,16 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <section className="pt-32 pb-24 min-h-[60vh] flex items-center">
+      <section className="pt-24 pb-12 sm:pt-32 sm:pb-24 min-h-[60vh] flex items-center">
         <div className="container mx-auto px-6 lg:px-10 text-center max-w-md">
-          <h1 className="font-display text-4xl text-primary">Tu carrito está vacío</h1>
-          <div className="gold-divider w-24 mx-auto my-6" />
-          <p className="font-editorial italic text-muted-foreground text-lg">
+          <h1 className="font-display text-3xl sm:text-4xl text-primary">Tu carrito está vacío</h1>
+          <div className="gold-divider w-20 sm:w-24 mx-auto my-4 sm:my-6" />
+          <p className="font-editorial italic text-muted-foreground text-base sm:text-lg">
             Descubrí nuestras fragancias seleccionadas y comenzá tu experiencia.
           </p>
           <Link
             href="/catalogo"
-            className="inline-flex items-center mt-8 px-8 py-4 bg-primary text-primary-foreground text-xs tracking-[0.3em] uppercase hover:bg-primary-glow transition-elegant"
+            className="inline-flex items-center mt-6 sm:mt-8 px-8 py-4 bg-primary text-primary-foreground text-xs tracking-[0.3em] uppercase hover:bg-primary-glow transition-elegant"
           >
             Explorar catálogo
           </Link>
@@ -159,18 +159,18 @@ export default function CheckoutPage() {
   }
 
   return (
-    <section className="pt-32 pb-24 bg-gradient-to-b from-cream/40 to-background">
+    <section className="pt-24 pb-12 sm:pt-32 sm:pb-24 bg-gradient-to-b from-cream/40 to-background">
       <div className="container mx-auto px-6 lg:px-10 max-w-6xl">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-12">
           <span className="text-xs tracking-[0.4em] uppercase text-gold">Checkout</span>
-          <h1 className="font-display text-4xl md:text-5xl text-primary mt-3">Finalizá tu compra</h1>
-          <div className="gold-divider w-24 mx-auto my-6" />
+          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl text-primary mt-3">Finalizá tu compra</h1>
+          <div className="gold-divider w-20 sm:w-24 mx-auto my-4 sm:my-6" />
         </div>
 
-        <div className="grid lg:grid-cols-[1fr_420px] gap-10">
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6 sm:gap-10">
           <form
             onSubmit={submit}
-            className="bg-background border border-border p-8 lg:p-10 shadow-soft space-y-8"
+            className="bg-background border border-border p-5 sm:p-8 lg:p-10 shadow-soft space-y-6 sm:space-y-8"
           >
             <fieldset>
               <legend className="font-display text-2xl text-primary mb-1">Datos personales</legend>
@@ -255,9 +255,9 @@ export default function CheckoutPage() {
             </button>
           </form>
 
-          <aside className="bg-cream/40 border border-border p-8 lg:p-10 h-fit lg:sticky lg:top-28">
-            <h2 className="font-display text-2xl text-primary">Tu orden</h2>
-            <div className="gold-divider w-12 my-4" />
+          <aside className="bg-cream/40 border border-border p-5 sm:p-8 lg:p-10 h-fit lg:sticky lg:top-28">
+            <h2 className="font-display text-xl sm:text-2xl text-primary">Tu orden</h2>
+            <div className="gold-divider w-10 sm:w-12 my-3 sm:my-4" />
 
             <ul className="space-y-5 max-h-[400px] overflow-y-auto pr-2">
               {items.map((i) => {

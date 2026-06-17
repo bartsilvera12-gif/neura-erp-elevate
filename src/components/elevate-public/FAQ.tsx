@@ -16,26 +16,26 @@ const faqs = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section id="faq" className="py-24 lg:py-32 bg-cream/30">
+    <section id="faq" className="py-12 sm:py-24 lg:py-32 bg-cream/30">
       <div className="container mx-auto px-6 lg:px-10">
         <SectionTitle eyebrow="FAQ" title="Preguntas frecuentes" />
-        <div className="mt-14 max-w-3xl mx-auto divide-y divide-border border-y border-border bg-background">
+        <div className="mt-8 sm:mt-14 max-w-3xl mx-auto divide-y divide-border border-y border-border bg-background">
           {faqs.map((f, i) => (
             <div key={i}>
               <button
                 type="button"
                 onClick={() => setOpen(open === i ? null : i)}
-                className="w-full flex items-center justify-between text-left p-6 lg:p-7 hover:bg-cream/40 transition-smooth"
+                className="w-full flex items-center justify-between text-left p-4 sm:p-6 lg:p-7 hover:bg-cream/40 transition-smooth"
                 aria-expanded={open === i}
               >
-                <span className="font-display text-lg md:text-xl text-primary pr-6">{f.q}</span>
+                <span className="font-display text-base sm:text-lg md:text-xl text-primary pr-4 sm:pr-6">{f.q}</span>
                 <ChevronDown
                   className={`shrink-0 text-gold transition-transform ${open === i ? "rotate-180" : ""}`}
                   size={20}
                 />
               </button>
               {open === i && (
-                <div className="px-6 lg:px-7 pb-7 text-foreground/75 leading-relaxed animate-fade-up">
+                <div className="px-4 sm:px-6 lg:px-7 pb-5 sm:pb-7 text-sm sm:text-base text-foreground/75 leading-relaxed animate-fade-up">
                   {f.a}
                 </div>
               )}
