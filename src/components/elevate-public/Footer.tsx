@@ -53,7 +53,7 @@ export function Footer() {
               <li><Link href="/faq" className="hover:text-gold-light transition-smooth">FAQ y Políticas</Link></li>
               <li><Link href="/politica-envios" className="hover:text-gold-light transition-smooth">Política de envíos</Link></li>
               <li><Link href="/politica-devoluciones" className="hover:text-gold-light transition-smooth">Política de devoluciones</Link></li>
-              <li><Link href="/politica-privacidad" className="hover:text-gold-light transition-smooth">Política de privacidad</Link></li>
+              <li><Link href="/privacidad" className="hover:text-gold-light transition-smooth">Política de privacidad</Link></li>
               <li><Link href="/compra-mayorista" className="hover:text-gold-light transition-smooth">Compra mayorista</Link></li>
             </ul>
           </div>

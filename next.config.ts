@@ -16,6 +16,18 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: "250mb",
   },
+  // Redirects 308 a nivel framework. Útil para mover rutas viejas a las
+  // nuevas convenciones sin romper links externos.
+  async redirects() {
+    return [
+      {
+        // Ruta vieja → nueva convención corta `/privacidad`.
+        source: "/politica-privacidad",
+        destination: "/privacidad",
+        permanent: true,
+      },
+    ];
+  },
   images: {
     // Dominios externos permitidos para next/image.
     // Sin esto el optimizador devuelve 400 a cualquier URL externa,
