@@ -1,6 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // El VPS de Coolify mata el container durante "Running TypeScript ..." por
+  // OOM (RAM acotada). El chequeo de tipos sigue siendo obligatorio en local
+  // y en CI vía `tsc --noEmit` antes de pushear. En el build de producción
+  // se saltea para que el deploy no truene por presión de memoria.
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   // Next.js 16 limita el body de las requests a 10 MB por defecto. El módulo
   // de reseñas acepta videos de hasta 200 MB (MP4/WebM/MOV), por lo que hay
   // que subir este tope. El nombre `middlewareClientMaxBodySize` es engañoso:
