@@ -7,7 +7,7 @@
  * acá solo definimos esos vars dentro del scope con la paleta bordeaux/dorado
  * de Elevate (HSL components → wrap con hsl()).
  *
- * Fuentes (Playfair, Cormorant, Inter) se cargan vía `next/font/google` en
+ * Fuentes (Playfair, Cormorant, Inter) se cargan vía `next/font/local` en
  * `publico/layout.tsx` y se exponen como vars `--font-playfair`, `--font-cormorant`,
  * `--font-inter`.
  */
