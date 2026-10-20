@@ -11,6 +11,7 @@ import {
   ELEVATE_PUBLIC_PREFIX,
   ELEVATE_PUBLIC_HEADER,
 } from "@/lib/elevate-public/hosts";
+import { MANTENIMIENTO_HTML, WEB_PUBLICA_EN_MANTENIMIENTO } from "@/lib/elevate-public/mantenimiento";
 
 /**
  * Middleware:
@@ -40,6 +41,18 @@ export async function middleware(request: NextRequest) {
     if (isAssetOrApi) {
       // En hosts públicos no refrescamos sesión Supabase (no hay sesión).
       return NextResponse.next();
+    }
+
+    // Web pública en mantenimiento (ver src/lib/elevate-public/mantenimiento.ts).
+    if (WEB_PUBLICA_EN_MANTENIMIENTO) {
+      return new NextResponse(MANTENIMIENTO_HTML, {
+        status: 503,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Retry-After": "86400",
+          "Cache-Control": "no-store",
+        },
+      });
     }
 
     // Si ya está rewriteado (defensivo), no duplicar prefijo.
